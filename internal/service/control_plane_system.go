@@ -65,6 +65,7 @@ type ControlPlaneService struct {
 	configMu      sync.Mutex
 	configVersion int
 	endpointMu    sync.RWMutex
+	ipv6CheckMu   sync.Mutex
 }
 
 // ------------------------------------------------------------------

@@ -4,11 +4,30 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"time"
 
 	"github.com/sagernet/netlink"
 	"golang.org/x/sys/unix"
 )
+
+func onLinkPrefixes(index int) []netip.Prefix {
+	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{LinkIndex: index}, netlink.RT_FILTER_OIF)
+	if err != nil {
+		return nil // Interface addresses remain available when route enumeration is restricted.
+	}
+	var prefixes []netip.Prefix
+	for _, route := range routes {
+		if route.Dst == nil || len(route.Gw) != 0 || route.Type != unix.RTN_UNICAST {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(route.Dst.String())
+		if err == nil {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+	return prefixes
+}
 
 // Acquire installs one /128 and waits for duplicate-address detection.
 // A non-nil release function removes an address created by this call.

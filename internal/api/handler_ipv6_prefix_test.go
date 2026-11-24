@@ -9,6 +9,23 @@ import (
 	"github.com/Resinat/Resin/internal/service"
 )
 
+func TestIPv6PrefixCheckReportsAssignmentFailureSeparately(t *testing.T) {
+	srv, _, _ := newControlPlaneTestServer(t)
+	const path = "/api/v1/ipv6-prefixes/check"
+	input := map[string]string{"interface": "nonexistent-test-interface", "prefix": "2001:db8:1::/56"}
+	got := doJSONRequest(t, srv, http.MethodPost, path, input, true)
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("invalid prefix returned %d: %s", got.Code, got.Body.String())
+	}
+	input["prefix"] = "2001:db8:1::/64"
+	got = doJSONRequest(t, srv, http.MethodPost, path, input, true)
+	var result service.IPv6PrefixCheck
+	if got.Code != http.StatusOK || json.Unmarshal(got.Body.Bytes(), &result) != nil ||
+		result.Assigned || result.Egress || result.Stage != "assign" || result.Address == "" || result.Error == "" {
+		t.Fatalf("unexpected assignment check result: %d %s", got.Code, got.Body.String())
+	}
+}
+
 func TestIPv6PrefixManagementAndProxySelection(t *testing.T) {
 	srv, cp, _ := newControlPlaneTestServer(t)
 	const prefixPath = "/api/v1/ipv6-prefixes"

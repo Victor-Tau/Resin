@@ -4,9 +4,17 @@ import type { Endpoint, SOCKS5Account } from "../endpoints/types";
 
 export type IPv6ConfigInput = SOCKS5Account & { interface: string; endpoint_ids: string[]; prefix_id?: string };
 export type IPv6Config = Omit<IPv6ConfigInput, "password"> & { id: string };
-export type IPv6Interface = { name: string; prefixes: string[] };
+export type IPv6Candidate = { prefix: string; parent: string };
+export type IPv6Interface = { name: string; prefixes: string[]; candidates?: IPv6Candidate[] };
 export type IPv6PrefixInput = { label: string; interface: string; prefix: string };
 export type IPv6Prefix = IPv6PrefixInput & { id: string; proxy_count: number };
+export type IPv6PrefixCheckResult = {
+  address: string;
+  assigned: boolean;
+  egress: boolean;
+  stage?: "assign" | "egress" | "cleanup";
+  error?: string;
+};
 
 const basePath = "/api/v1/ipv6-configs";
 const prefixesPath = "/api/v1/ipv6-prefixes";
@@ -23,6 +31,10 @@ export function saveIPv6Prefix(input: IPv6PrefixInput, id?: string) {
 
 export function deleteIPv6Prefix(id: string) {
   return apiRequest<void>(`${prefixesPath}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function checkIPv6Prefix(input: Pick<IPv6PrefixInput, "interface" | "prefix">) {
+  return apiRequest<IPv6PrefixCheckResult>(`${prefixesPath}/check`, { method: "POST", body: input });
 }
 
 export function listIPv6Interfaces() {

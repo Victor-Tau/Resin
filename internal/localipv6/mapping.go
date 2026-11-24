@@ -2,6 +2,7 @@
 package localipv6
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"net/netip"
@@ -26,8 +27,14 @@ func ParseMapping(iface, cidr string) (Mapping, error) {
 }
 
 type Interface struct {
-	Name     string   `json:"name"`
-	Prefixes []string `json:"prefixes"`
+	Name       string      `json:"name"`
+	Prefixes   []string    `json:"prefixes"`
+	Candidates []Candidate `json:"candidates"`
+}
+
+type Candidate struct {
+	Prefix netip.Prefix `json:"prefix"`
+	Parent netip.Prefix `json:"parent"`
 }
 
 func Interfaces() ([]Interface, error) {
@@ -45,15 +52,52 @@ func Interfaces() ([]Interface, error) {
 			return nil, err
 		}
 		info := Interface{Name: link.Name, Prefixes: []string{}}
+		var networks []netip.Prefix
 		for _, address := range addresses {
 			p, err := netip.ParsePrefix(address.String())
 			if err == nil && globalUnicast.Contains(p.Addr()) {
 				info.Prefixes = append(info.Prefixes, p.Masked().String())
+				networks = append(networks, p)
 			}
 		}
+		networks = append(networks, onLinkPrefixes(link.Index)...)
+		info.Candidates = candidatesForNetworks(networks)
 		slices.Sort(info.Prefixes)
 		info.Prefixes = slices.Compact(info.Prefixes)
 		result = append(result, info)
 	}
 	return result, nil
+}
+
+func candidatesForNetworks(networks []netip.Prefix) []Candidate {
+	byPrefix := make(map[netip.Prefix]netip.Prefix)
+	for _, network := range networks {
+		parent := network.Masked()
+		if parent.Bits() < globalUnicast.Bits() || parent.Bits() > 64 || !globalUnicast.Contains(parent.Addr()) {
+			continue
+		}
+		candidateCount := 1
+		first := netip.PrefixFrom(network.Addr(), 64).Masked()
+		// Expand /56 and narrower networks completely. For larger networks
+		// offer the /64 containing the interface address or route start.
+		if parent.Bits() >= 56 {
+			candidateCount = 1 << (64 - parent.Bits())
+			first = netip.PrefixFrom(parent.Addr(), 64)
+		}
+		addr := first.Addr().As16()
+		start := binary.BigEndian.Uint64(addr[:8])
+		for i := 0; i < candidateCount; i++ {
+			binary.BigEndian.PutUint64(addr[:8], start+uint64(i))
+			prefix := netip.PrefixFrom(netip.AddrFrom16(addr), 64)
+			if previous, exists := byPrefix[prefix]; !exists || parent.Bits() > previous.Bits() {
+				byPrefix[prefix] = parent
+			}
+		}
+	}
+	result := make([]Candidate, 0, len(byPrefix))
+	for prefix, parent := range byPrefix {
+		result = append(result, Candidate{Prefix: prefix, Parent: parent})
+	}
+	slices.SortFunc(result, func(a, b Candidate) int { return a.Prefix.Addr().Compare(b.Prefix.Addr()) })
+	return result
 }

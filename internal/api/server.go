@@ -98,6 +98,7 @@ func NewServerWithAddress(
 		authed.Handle("DELETE /api/v1/ipv6-configs/{id}", HandleDeleteIPv6Config(cp))
 		authed.Handle("GET /api/v1/ipv6-prefixes", HandleListIPv6Prefixes(cp))
 		authed.Handle("POST /api/v1/ipv6-prefixes", HandleSaveIPv6Prefix(cp, http.StatusCreated))
+		authed.Handle("POST /api/v1/ipv6-prefixes/check", HandleCheckIPv6Prefix(cp))
 		authed.Handle("PUT /api/v1/ipv6-prefixes/{id}", HandleSaveIPv6Prefix(cp, http.StatusOK))
 		authed.Handle("DELETE /api/v1/ipv6-prefixes/{id}", HandleDeleteIPv6Prefix(cp))
 

@@ -6,6 +6,25 @@ import (
 	"github.com/Resinat/Resin/internal/service"
 )
 
+func HandleCheckIPv6Prefix(cp *service.ControlPlaneService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Interface string `json:"interface"`
+			Prefix    string `json:"prefix"`
+		}
+		if err := DecodeBody(r, &input); err != nil {
+			writeDecodeBodyError(w, err)
+			return
+		}
+		result, err := cp.CheckIPv6Prefix(r.Context(), input.Interface, input.Prefix)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, result)
+	}
+}
+
 func HandleListIPv6Prefixes(cp *service.ControlPlaneService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		prefixes, err := cp.ListIPv6Prefixes()

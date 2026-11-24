@@ -41,7 +41,9 @@ export function IPv6Editor({ initial, legacy, prefixes, defaultPrefix, endpoints
 
   const saved = prefixes.find(({ id }) => id === prefixID);
   const manual = legacy || prefixID === manualPrefix;
-  const detected = interfaces.find((item) => item.name === iface)?.prefixes.filter((prefix) => ipv6Network(prefix)) ?? [];
+  const selectedInterface = interfaces.find((item) => item.name === iface);
+  const detected = selectedInterface?.candidates?.map(({ prefix }) => prefix) ??
+    selectedInterface?.prefixes.filter(ipv6Network) ?? [];
   const bindable = endpoints.filter((endpoint) => endpoint.allow_socks5 || bindings.includes(endpoint.id));
   const network = ipv6Network(saved?.prefix ?? (selectedPrefix === manualPrefix ? customPrefix : selectedPrefix));
 

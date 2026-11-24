@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Layers, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Layers, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -15,17 +15,20 @@ import {
   type IPv6PrefixInput,
 } from "./api";
 import { ipv6Network } from "./generate";
+import { IPv6PrefixCheck } from "./IPv6PrefixCheck";
 
 type Props = {
   prefixes: IPv6Prefix[];
   interfaces: IPv6Interface[];
   loading: boolean;
+  detecting: boolean;
+  onDetect: () => void;
   proxyPending: boolean;
   canCreateProxy: boolean;
   onUse: (prefix: IPv6Prefix) => void;
 };
 
-export function IPv6Prefixes({ prefixes, interfaces, loading, proxyPending, canCreateProxy, onUse }: Props) {
+export function IPv6Prefixes({ prefixes, interfaces, loading, detecting, onDetect, proxyPending, canCreateProxy, onUse }: Props) {
   const { t } = useI18n();
   const client = useQueryClient();
   const [editing, setEditing] = useState<IPv6Prefix | null>();
@@ -64,10 +67,16 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, proxyPending, canC
           <h3>{t("号段管理")}</h3>
           <p>{t("号段是一组可分配给代理的 IPv6 地址。给它起个好记的名字，创建代理时就能直接选用。")}</p>
         </div>
-        <Button onClick={() => open(null)} disabled={busy || editing === null}>
-          <Plus size={16} />
-          {t("添加号段")}
-        </Button>
+        <div className="detail-actions">
+          <Button variant="secondary" disabled={detecting} onClick={onDetect}>
+            <RefreshCw size={16} aria-hidden="true" />
+            {detecting ? t("正在检测号段…") : t("重新检测号段")}
+          </Button>
+          <Button onClick={() => open(null)} disabled={busy || editing === null}>
+            <Plus size={16} />
+            {t("添加号段")}
+          </Button>
+        </div>
       </div>
 
       {problem != null && <div className="callout callout-error" role="alert">{formatApiErrorMessage(problem, t)}</div>}
@@ -76,6 +85,7 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, proxyPending, canC
           key={editing?.id ?? "new-prefix"}
           initial={editing}
           interfaces={interfaces}
+          detecting={detecting}
           busy={busy}
           onClose={() => { setEditing(undefined); setProblem(null); }}
           onSave={(input) => { setProblem(null); save.mutate(input); }}
@@ -106,6 +116,7 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, proxyPending, canC
               </div>
               <code className="ipv6-prefix-address">{prefix.prefix}</code>
               <p className="muted">{t("出口网卡 {{name}}", { name: prefix.interface })}</p>
+              <IPv6PrefixCheck iface={prefix.interface} prefix={prefix.prefix} disabled={busy} />
               <div className="ipv6-card-actions">
                 <Button size="sm" variant="secondary" onClick={() => onUse(prefix)} disabled={busy || !canCreateProxy || editing !== undefined}>
                   {t("用此号段创建代理")}
@@ -138,16 +149,28 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, proxyPending, canC
 type EditorProps = {
   initial: IPv6Prefix | null;
   interfaces: IPv6Interface[];
+  detecting: boolean;
   busy: boolean;
   onClose: () => void;
   onSave: (input: IPv6PrefixInput) => void;
 };
 
-function PrefixEditor({ initial, interfaces, busy, onClose, onSave }: EditorProps) {
+function PrefixEditor({ initial, interfaces, detecting, busy, onClose, onSave }: EditorProps) {
   const { t } = useI18n();
-  const detected = interfaces.flatMap(({ name, prefixes }) =>
-    prefixes.filter((prefix) => ipv6Network(prefix)).map((prefix) => ({ interface: name, prefix, key: `${name}/${prefix}` })),
+  const detected = interfaces.flatMap(({ name, prefixes, candidates }) =>
+    (candidates ?? prefixes.filter(ipv6Network).map((prefix) => ({ prefix, parent: prefix })))
+      .map(({ prefix, parent }) => ({ interface: name, prefix, parent, key: `${name}/${prefix}` })),
   );
+  const groups = new Map<string, typeof detected>();
+  for (const item of detected) {
+    const group = `${item.interface} · ${item.parent}`;
+    const members = groups.get(group);
+    if (members) {
+      members.push(item);
+    } else {
+      groups.set(group, [item]);
+    }
+  }
   const current = detected.find((item) => item.interface === initial?.interface && item.prefix === initial?.prefix);
   const [choice, setChoice] = useState(current?.key ?? (initial ? "manual" : ""));
   const [label, setLabel] = useState(initial?.label ?? "");
@@ -155,10 +178,12 @@ function PrefixEditor({ initial, interfaces, busy, onClose, onSave }: EditorProp
   const [prefix, setPrefix] = useState(initial?.prefix ?? "");
   const [invalid, setInvalid] = useState(false);
   const fixed = Boolean(initial?.proxy_count);
+  const selection = fixed ? initial : choice === "manual"
+    ? { interface: iface.trim(), prefix: prefix.trim() }
+    : detected.find(({ key }) => key === choice);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const selection = fixed ? initial : choice === "manual" ? { interface: iface, prefix } : detected.find(({ key }) => key === choice);
     if (!selection || !selection.interface.trim() || !ipv6Network(selection.prefix) || !label.trim()) {
       setInvalid(true);
       return;
@@ -189,12 +214,16 @@ function PrefixEditor({ initial, interfaces, busy, onClose, onSave }: EditorProp
               setInvalid(false);
             }}>
               <option value="">{t("选择服务器检测到的号段")}</option>
-              {detected.map((item) => (
-                <option key={item.key} value={item.key}>{item.prefix} · {item.interface}</option>
+              {Array.from(groups, ([group, items]) => (
+                <optgroup key={group} label={group}>
+                  {items.map((item) => <option key={item.key} value={item.key}>{item.prefix}</option>)}
+                </optgroup>
               ))}
               <option value="manual">{t("手动填写号段")}</option>
             </select>
-            {!detected.length && <small className="muted">{t("未检测到 /64 号段。可以手动填写网络服务商分配的号段。")}</small>}
+            <small className="muted">{detecting ? t("正在检测号段…") : detected.length
+              ? t("检测到 {{count}} 个候选 /64 号段。请选择一个并验证。", { count: detected.length })
+              : t("服务器未发现候选 /64。可以输入网络服务商分配的号段再验证。")}</small>
           </label>
         )}
         {!fixed && choice === "manual" && (
@@ -215,6 +244,12 @@ function PrefixEditor({ initial, interfaces, busy, onClose, onSave }: EditorProp
           </>
         )}
         {invalid && <p className="callout callout-error field-span-2" role="alert">{t("请填写标签、出口网卡和有效的公网 IPv6 /64 号段。")}</p>}
+        {selection?.interface && ipv6Network(selection.prefix) && (
+          <div className="field-span-2">
+            <small className="muted">{t("验证时会临时添加一个随机地址，检查公网连接后移除。")}</small>
+            <IPv6PrefixCheck iface={selection.interface} prefix={selection.prefix} disabled={busy} />
+          </div>
+        )}
         <div className="detail-actions field-span-2">
           <Button type="submit">{busy ? t("保存中...") : t("保存号段")}</Button>
           <Button variant="secondary" onClick={onClose}>{t("取消")}</Button>

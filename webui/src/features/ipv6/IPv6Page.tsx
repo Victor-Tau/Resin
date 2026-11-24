@@ -166,6 +166,8 @@ export function IPv6Page() {
         prefixes={prefixes}
         interfaces={interfacesQuery.data ?? []}
         loading={prefixesQuery.isPending}
+        detecting={interfacesQuery.isFetching}
+        onDetect={() => void interfacesQuery.refetch()}
         proxyPending={pending}
         canCreateProxy={!proxyFormUnavailable}
         onUse={(prefix) => openEditor(null, prefix)}

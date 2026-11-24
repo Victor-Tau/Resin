@@ -630,6 +630,21 @@ Note: Once enabled, requests without authentication information are rejected ins
     "A prefix is a range of IPv6 addresses for your proxies. Give it a memorable label and select it when creating a proxy.",
   "号段标签": "Prefix label",
   "号段管理": "Address Ranges",
+  "重新检测号段": "Refresh Detected Ranges",
+  "正在检测号段…": "Detecting address ranges…",
+  "检测到 {{count}} 个候选 /64 号段。请选择一个并验证。": "Found {{count}} candidate /64 ranges. Select one to verify.",
+  "服务器未发现候选 /64。可以输入网络服务商分配的号段再验证。":
+    "No candidate /64 ranges were found. Enter a range assigned by your network provider to verify it.",
+  "验证时会临时添加一个随机地址，检查公网连接后移除。":
+    "Resin adds a random address for this check and removes it after testing public connectivity.",
+  "验证号段可用性": "Verify Address Range",
+  "正在验证号段…": "Verifying address range…",
+  "临时测试地址清理失败": "Could not remove the temporary test address",
+  "无法在网卡添加新地址": "Could not add a new address to the interface",
+  "可分配地址，公网 IPv6 已验证": "Address assignable and public IPv6 verified",
+  "可添加地址，公网 IPv6 未验证": "Address added. Public IPv6 is unverified.",
+  "测试地址": "Test address",
+  "查看检测详情": "View check details",
   "客户端通过端口接入": "The port your client connects to",
   "已保存的号段": "Saved address range",
   "独立地址": "Standalone address",
@@ -880,6 +895,7 @@ export function buildZhTranslations(): Record<string, string> {
     "proxy address must belong to the selected IPv6 prefix": "代理地址需要在所选号段的范围内",
     "IPv6 prefix label must be 1–60 characters": "号段标签须为 1 到 60 个字符",
     "IPv6 prefix not found": "找不到该号段",
+    "another IPv6 prefix check is running": "另一项号段验证正在进行，请稍后重试",
     "select an interface and a public IPv6 address with /64": "请选择出口网卡并填写公网 IPv6 /64 地址",
   };
 }
