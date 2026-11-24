@@ -3157,6 +3157,60 @@ a {
   font-size: 13px;
 }
 
+.ipv6-flow li.ipv6-flow-trigger {
+  padding: 0;
+}
+
+.ipv6-flow-button {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ipv6-flow-button:hover,
+.ipv6-flow-button:focus-visible {
+  background: #eaf2ff;
+}
+
+.ipv6-flow-button small {
+  display: block;
+  font-size: 13px;
+}
+
+.ipv6-dialog {
+  margin: auto;
+  max-width: calc(100% - 32px);
+  max-height: calc(100dvh - 32px);
+  color: inherit;
+}
+
+.ipv6-dialog::backdrop {
+  background: rgba(15, 29, 53, 0.36);
+  backdrop-filter: blur(4px);
+}
+
+.ipv6-prefix-manager,
+.ipv6-copy-form,
+.ipv6-credential-links {
+  margin-top: 12px;
+}
+
+.ipv6-copy-form .ipv6-fieldset {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .ipv6-icon-tile {
   display: inline-grid;
   flex: 0 0 36px;
@@ -3308,7 +3362,23 @@ a {
 }
 
 .data-table.ipv6-table {
-  min-width: 690px;
+  min-width: 790px;
+}
+
+.ipv6-select-cell {
+  width: 1%;
+}
+
+.ipv6-select-cell input {
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.ipv6-address-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .ipv6-legacy {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useI18n } from "../../i18n";
+import { copyText } from "../../lib/clipboard";
 import { getEnvConfig } from "../systemConfig/api";
 
 const PROXY_TOKEN_STORAGE_KEY = "resin_proxy_token";
@@ -126,18 +127,7 @@ function CopyField({ label, value, hint, copyLabel, copiedLabel }: CopyFieldProp
 
   const handleCopy = async () => {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        const area = document.createElement("textarea");
-        area.value = value;
-        area.style.position = "fixed";
-        area.style.opacity = "0";
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand("copy");
-        document.body.removeChild(area);
-      }
+      await copyText(value);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {

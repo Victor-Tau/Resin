@@ -3,7 +3,6 @@ import { ArrowRight, Layers, Pencil, Plus, RefreshCw, Trash2 } from "lucide-reac
 import { useState, type FormEvent } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { useI18n } from "../../i18n";
 import { formatApiErrorMessage } from "../../lib/error-message";
@@ -61,12 +60,8 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, detecting, onDetec
   }
 
   return (
-    <Card className="platform-list-card ipv6-section" id="ipv6-prefixes">
+    <div className="ipv6-section ipv6-prefix-manager">
       <div className="list-card-header ipv6-section-header">
-        <div>
-          <h3>{t("号段管理")}</h3>
-          <p>{t("号段是一组可分配给代理的 IPv6 地址。给它起个好记的名字，创建代理时就能直接选用。")}</p>
-        </div>
         <div className="detail-actions">
           <Button variant="secondary" disabled={detecting} onClick={onDetect}>
             <RefreshCw size={16} aria-hidden="true" />
@@ -142,7 +137,7 @@ export function IPv6Prefixes({ prefixes, interfaces, loading, detecting, onDetec
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

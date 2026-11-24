@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { storeIPv6Passwords } from "../ipv6/proxyLinks";
 
 const TOKEN_KEY = "resin_admin_token";
 
@@ -15,16 +16,20 @@ type AuthState = {
   clearToken: () => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: loadInitialToken(),
   setToken: (token) => {
     const next = token.trim();
+    if (next !== get().token) {
+      storeIPv6Passwords(new Map());
+    }
     if (typeof window !== "undefined") {
       window.localStorage.setItem(TOKEN_KEY, next);
     }
     set({ token: next });
   },
   clearToken: () => {
+    storeIPv6Passwords(new Map());
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(TOKEN_KEY);
     }
