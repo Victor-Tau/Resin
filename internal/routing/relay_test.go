@@ -9,6 +9,7 @@ import (
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"github.com/sagernet/sing-box/adapter"
 )
@@ -33,7 +34,7 @@ func TestRelaySelectionRegionLatencyAndCompatibility(t *testing.T) {
 		e, _ := pool.GetEntry(hash)
 		var ob adapter.Outbound = &tcpRelayOutbound{testutil.NewNoopOutbound()}
 		e.Outbound.Store(&ob)
-		pool.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(pool, hash)
 		pool.UpdateNodeEgressIP(hash, nil, &region)
 		pool.RecordLatency(hash, "speed.example", &latency)
 		return hash

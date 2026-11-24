@@ -1,5 +1,7 @@
 export type EndpointStatus = "active" | "starting" | "inactive" | "error" | string;
 
+export type SOCKS5Account = { username: string; password?: string; address: string };
+
 export type Endpoint = {
   id: string;
   port: number;
@@ -10,6 +12,8 @@ export type Endpoint = {
   allow_http_forward: boolean;
   allow_http_reverse: boolean;
   allow_socks5: boolean;
+  socks5_ipv6_interface: string;
+  socks5_accounts: SOCKS5Account[];
   source: "environment" | "database" | string;
   read_only: boolean;
   status: EndpointStatus;
@@ -27,6 +31,8 @@ export type EndpointInput = {
   allow_http_forward: boolean;
   allow_http_reverse: boolean;
   allow_socks5: boolean;
+  socks5_ipv6_interface: string;
+  socks5_accounts: SOCKS5Account[];
 };
 
 export type EndpointPatch = Partial<EndpointInput>;

@@ -8,6 +8,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func addChainMember(pool *GlobalNodePool, sub *subscription.Subscription, raw string) node.Hash {
@@ -31,7 +32,7 @@ func TestNodeChainRoleAggregatesAndFallsBack(t *testing.T) {
 	e, _ := pool.GetEntry(hash)
 	ob := testutil.NewNoopOutbound()
 	e.Outbound.Store(&ob)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	ip := netip.MustParseAddr("203.0.113.5")
 	loc := "us"
 	pool.UpdateNodeEgressIP(hash, &ip, &loc)
@@ -79,7 +80,7 @@ func TestRelayViewTracksHealthRegionAndEnabledState(t *testing.T) {
 	e, _ := pool.GetEntry(hash)
 	ob := testutil.NewNoopOutbound()
 	e.Outbound.Store(&ob)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	var availabilityEvents int
 	pool.SetOnRelayAvailable(func() { availabilityEvents++ })
 	region := "us"
@@ -100,7 +101,8 @@ func TestRelayViewTracksHealthRegionAndEnabledState(t *testing.T) {
 	if pool.RelayView("", "tcp").Contains(hash) {
 		t.Fatal("circuit-open relay remains selectable")
 	}
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
+	healthtest.ProbeEgressOK(pool, hash)
 	if availabilityEvents != 1 {
 		t.Fatal("first recovered relay must signal availability")
 	}
@@ -131,7 +133,7 @@ func TestModeSwitchDoesNotReuseOldProbeErrorForImmediateEviction(t *testing.T) {
 	entry, _ := pool.GetEntry(hash)
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	failed := false
 	message := "previous latency probe timeout"
 	pool.ApplyFeedback(hash, entry.RoutingVersion(), node.Feedback{Result: &failed, LastError: &message})

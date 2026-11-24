@@ -245,7 +245,7 @@ No available proxy nodes
 * 结构：`xsync.Map<NodeHash, NodeEntry>`。NodeEntry 包含了节点的详细信息。
 * 职责：维护每个节点的详细信息。作为系统状态的收敛点，保证节点管理的幂等性。
 * 节点增删接口：
-    * `AddNodeFromSub(node, subID)`: 如果节点存在，将 subID 加入引用集合；如果不存在，创建节点并将 subID 加入引用集合。新创建的节点默认进入熔断状态（`CircuitOpenSince = now`），需要后续当前出站版本的成功反馈（通常由主动/被动探测触发）恢复为可路由。此操作注意给目标节点的 SubscriptionIDs 加锁。重复添加相同的 (node, subID) 对是幂等的。另外，每次调用 `AddNodeFromSub`，都要重新检查每个平台对这个节点的过滤。因为 `AddNodeFromSub` 可能引入新 Tag。
+    * `AddNodeFromSub(node, subID)`: 如果节点存在，将 subID 加入引用集合；如果不存在，创建节点并将 subID 加入引用集合。新创建的节点默认进入熔断状态（`CircuitOpenSince = now`），新节点首次出口探测返回有效 IP 后可进入路由视图。此操作注意给目标节点的 SubscriptionIDs 加锁。重复添加相同的 (node, subID) 对是幂等的。另外，每次调用 `AddNodeFromSub`，都要重新检查每个平台对这个节点的过滤。因为 `AddNodeFromSub` 可能引入新 Tag。
     * `RemoveNodeFromSub(nodeHash, subID)`: 将 subID 从引用集合移除。如果引用集合为空，则从全局池物理删除节点。此操作注意给目标节点的 SubscriptionIDs 加锁。重复删除是幂等的。调用不存在的 `nodeHash` 也不报错。另外，每次调用 `RemoveNodeFromSub`，都要重新检查每个平台对这个节点的过滤。因为 `RemoveNodeFromSub` 可能删除 Tag。
 
 * NodeEntry 结构：
@@ -414,7 +414,7 @@ Platform 过滤时，通过 `NodeEntry.MatchTagFilter` 方法，反向查询 Ref
 ### 健康管理接口
 运行时被动反馈与主动探测统一调用 `ApplyFeedback(hash, version, feedback)`。反馈包含网络结果、延迟、出口和错误中的相关项；只接受与当前节点出站版本匹配的非零版本反馈。
 
-* 网络结果为成功时，重置 FailureCount 并清空 CircuitOpenSince；失败时递增计数，达到 MaxConsecutiveFailures 后熔断。被动反馈附带 PlatformID，对应平台禁用被动熔断时忽略失败计数，成功仍有效。
+* 健康节点收到成功结果时重置 FailureCount。失败时递增计数，达到 MaxConsecutiveFailures 后熔断。出口探测另行累计连续失败次数，同样按此阈值熔断。被动反馈附带 PlatformID，对应平台禁用被动熔断时忽略失败计数，成功仍有效。
 * 延迟为 nil 时只记录尝试时间，非空时更新 TD-EWMA；权威域名同时更新 LastAuthorityLatencyProbeAttempt。首次得到延迟样本时通知平台重新过滤。
 * 出口探测总是更新 LastEgressUpdateAttempt；成功样本更新出口 IP、地区和 LastEgressUpdate，出口变化时通知平台重新过滤。
 
@@ -442,7 +442,7 @@ Resin 使用计数器熔断机制保护系统稳定性。
 * 熔断触发：由 `ApplyFeedback` 接受的当前出站版本失败结果触发。当连续失败次数 >= 阈值时，节点进入熔断状态。熔断的节点会立即从所有 Platform 的可路由视图中移除，不再承载用户流量。
 	* 用户代理流量的反馈携带 PlatformID；当对应 Platform 开启 `passive_circuit_breaker_disabled` 时，这类失败不会触发熔断。
 	* 主动探测不携带 PlatformID，不受该平台配置影响。
-* 熔断恢复：熔断后的节点依然保留在全局池中，接受 ProbeManager 的主动探测。当前出站版本的成功反馈到达后，节点立即恢复，再按过滤条件加入可路由视图。
+* 熔断恢复：熔断后的节点依然保留在全局池中，接受 ProbeManager 的主动探测。当前出站版本的出口探测连续返回有效 IP 达到 `recovery_successes` 后，节点按过滤条件重新加入可路由视图。出口探测失败清零恢复计数。
 * 熔断逻辑由全局代理池管理。禁止其他模块直接修改节点的熔断状态。
 
 ### 延迟统计 (TD-EWMA)
@@ -1122,6 +1122,7 @@ Resin 需要做实事与历史的统计数据，用于 Dashboard 展示。
   "reverse_proxy_log_resp_headers_max_bytes": 1024,
   "reverse_proxy_log_resp_body_max_bytes": 1024,
   "max_consecutive_failures": 3,
+  "recovery_successes": 2,
   "max_latency_test_interval": "1h",
   "max_authority_latency_test_interval": "3h",
   "max_egress_test_interval": "24h",
@@ -1149,6 +1150,7 @@ Resin 需要做实事与历史的统计数据，用于 Dashboard 展示。
   "reverse_proxy_log_resp_headers_max_bytes": 1024,
   "reverse_proxy_log_resp_body_max_bytes": 1024,
   "max_consecutive_failures": 3,
+  "recovery_successes": 2,
   "max_latency_test_interval": "1h",
   "max_authority_latency_test_interval": "3h",
   "max_egress_test_interval": "24h",
@@ -1294,7 +1296,7 @@ Body：
 * `regex_filters`：节点标签过滤规则列表，语义与校验见“节点标签过滤规则”。
 * `region_filters`：每项为 ISO 3166-1 alpha-2 小写代码。
 * 枚举字段：`reverse_proxy_miss_action` 仅 `TREAT_AS_EMPTY|REJECT`；`reverse_proxy_empty_account_behavior` 仅 `RANDOM|FIXED_HEADER|ACCOUNT_HEADER_RULE`；`allocation_policy` 仅 `BALANCED|PREFER_LOW_LATENCY|PREFER_IDLE_IP`。
-* `passive_circuit_breaker_disabled`：布尔值。设为 `true` 后，此 Platform 的用户代理请求失败不会增加节点熔断计数；主动探测不受影响。成功请求仍会清除节点连续失败计数并可恢复熔断节点。
+* `passive_circuit_breaker_disabled`：布尔值。设为 `true` 后，此 Platform 的用户代理请求失败不会增加节点熔断计数；主动探测不受影响。健康节点上的成功请求会清除普通失败计数。出口探测的连续失败次数独立累计。
 * 组合约束：当 `reverse_proxy_empty_account_behavior=FIXED_HEADER` 时，`reverse_proxy_fixed_account_header` 必填；其值支持多行，每行一个合法 HTTP Header 字段名（会按顺序尝试提取）。
 
 错误码映射（最小集）：

@@ -20,6 +20,7 @@ import (
 	"github.com/Resinat/Resin/internal/platform"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -50,7 +51,7 @@ func TestDeferredNoRelayDoesNotTripLandingCircuit(t *testing.T) {
 	pool.UpdateNodeEgressIP(hash, &ip, nil)
 	latency := time.Millisecond
 	pool.RecordLatency(hash, "example.com", &latency)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	pool.RegisterPlatform(platform.NewPlatform("p", "p", nil, nil))
 	pool.RebuildAllPlatforms()
 	router := routing.NewRouter(routing.RouterConfig{Pool: pool, Authorities: func() []string { return nil }, P2CWindow: func() time.Duration { return time.Minute }})

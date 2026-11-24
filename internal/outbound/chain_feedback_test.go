@@ -14,6 +14,7 @@ import (
 	"github.com/Resinat/Resin/internal/probe"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -39,7 +40,7 @@ func newChainFeedbackPool(t *testing.T) (*topology.GlobalNodePool, *node.NodeEnt
 		sub.ManagedNodes().StoreNode(hash, subscription.ManagedNode{})
 		pool.AddNodeFromSub(hash, raw, sub.ID)
 		mgr.EnsureNodeOutbound(hash)
-		pool.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(pool, hash)
 		entry, _ := pool.GetEntry(hash)
 		return entry
 	}

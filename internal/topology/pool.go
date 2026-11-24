@@ -52,6 +52,7 @@ type GlobalNodePool struct {
 	// Health config
 	maxLatencyTableEntries int
 	maxConsecutiveFailures func() int
+	recoverySuccesses      func() int
 	latencyDecayWindow     func() time.Duration
 	latencyAuthorities     func() []string
 }
@@ -67,6 +68,7 @@ type PoolConfig struct {
 	OnNodeLatencyChanged   func(hash node.Hash, domain string)
 	MaxLatencyTableEntries int
 	MaxConsecutiveFailures func() int
+	RecoverySuccesses      func() int
 	LatencyDecayWindow     func() time.Duration
 	LatencyAuthorities     func() []string
 }
@@ -96,6 +98,7 @@ func NewGlobalNodePool(cfg PoolConfig) *GlobalNodePool {
 		onNodeLatencyChanged:   cfg.OnNodeLatencyChanged,
 		maxLatencyTableEntries: cfg.MaxLatencyTableEntries,
 		maxConsecutiveFailures: maxConsecutiveFailuresFn,
+		recoverySuccesses:      cfg.RecoverySuccesses,
 		latencyDecayWindow:     cfg.LatencyDecayWindow,
 		latencyAuthorities:     cfg.LatencyAuthorities,
 		platformByID:           make(map[string]*platform.Platform),

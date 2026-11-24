@@ -32,6 +32,9 @@ func ParseCloudflareTrace(body []byte) (netip.Addr, *string, error) {
 			if err != nil {
 				return netip.Addr{}, nil, err
 			}
+			if addr.Zone() != "" || !addr.IsGlobalUnicast() {
+				return netip.Addr{}, nil, errors.New("probe: invalid egress address")
+			}
 			ip = addr
 			ipFound = true
 			continue

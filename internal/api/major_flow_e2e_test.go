@@ -24,6 +24,7 @@ import (
 	"github.com/Resinat/Resin/internal/service"
 	"github.com/Resinat/Resin/internal/state"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -82,7 +83,7 @@ func newMajorFlowHarness(t *testing.T, subscriptionUserAgent string) *majorFlowH
 		pool.UpdateNodeEgressIP(hash, &ip, nil)
 		latency := 25 * time.Millisecond
 		pool.RecordLatency(hash, "example.com", &latency)
-		pool.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(pool, hash)
 	})
 	pool.SetOnNodeRemoved(func(_ node.Hash, entry *node.NodeEntry) {
 		outboundMgr.RemoveNodeOutbound(entry)

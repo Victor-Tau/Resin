@@ -19,6 +19,7 @@ import (
 	"github.com/Resinat/Resin/internal/state"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"golang.org/x/net/http/httpguts"
 )
@@ -639,7 +640,7 @@ func TestGetSubscription_NodeCountExcludesEvictedManagedNodes(t *testing.T) {
 	}
 	activeOutbound := testutil.NewNoopOutbound()
 	activeEntry.Outbound.Store(&activeOutbound)
-	pool.RecordResult(activeHash, true)
+	healthtest.ProbeEgressOK(pool, activeHash)
 
 	// Shared node is marked evicted in subA but still healthy in pool via subB.
 	sharedRaw := []byte(`{"type":"ss","server":"2.2.2.2","port":443}`)
@@ -654,7 +655,7 @@ func TestGetSubscription_NodeCountExcludesEvictedManagedNodes(t *testing.T) {
 	}
 	sharedOutbound := testutil.NewNoopOutbound()
 	sharedEntry.Outbound.Store(&sharedOutbound)
-	pool.RecordResult(sharedHash, true)
+	healthtest.ProbeEgressOK(pool, sharedHash)
 
 	evictedNode, ok := subA.ManagedNodes().LoadNode(sharedHash)
 	if !ok {
@@ -704,7 +705,7 @@ func TestGetSubscription_HealthyNodeCount_ExcludesDisabledSubscriptionNodes(t *t
 	}
 	outbound := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&outbound)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 
 	cp := &ControlPlaneService{
 		Pool:   pool,

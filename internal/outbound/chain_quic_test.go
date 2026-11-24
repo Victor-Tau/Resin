@@ -11,6 +11,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -37,7 +38,7 @@ func TestHysteriaChainRequiresUDPRelayForTCPRequest(t *testing.T) {
 		return h
 	}
 	r := add(relay, `{"type":"http","server":"127.0.0.1","server_port":12345}`)
-	pool.RecordResult(r, true)
+	healthtest.ProbeEgressOK(pool, r)
 	h := add(landing, `{"type":"hysteria2","server":"127.0.0.1","server_port":23456,"password":"test","tls":{"enabled":true,"insecure":true}}`)
 	e, _ := pool.GetEntry(h)
 	if !e.HasOutbound() {

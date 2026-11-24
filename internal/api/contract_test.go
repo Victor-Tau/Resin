@@ -28,6 +28,7 @@ import (
 	"github.com/Resinat/Resin/internal/state"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -671,7 +672,7 @@ func TestAPIContract_PlatformListIncludesRoutableNodeCount(t *testing.T) {
 	entry.LatencyTable.Update("example.com", 25*time.Millisecond, 10*time.Minute)
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
-	cp.Pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(cp.Pool, hash)
 	cp.Pool.NotifyNodeDirty(hash)
 
 	rec := doJSONRequest(t, srv, http.MethodGet, "/api/v1/platforms?keyword=routable-count-target", nil, true)

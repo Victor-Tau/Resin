@@ -86,6 +86,7 @@ func NewServerWithAddress(
 		authed.Handle("POST /api/v1/platforms/{id}/actions/rebuild-routable-view", HandleRebuildPlatform(cp))
 
 		// Endpoints.
+		authed.HandleFunc("GET /api/v1/system/ipv6-interfaces", HandleIPv6Interfaces)
 		authed.Handle("GET /api/v1/endpoints", HandleListEndpoints(cp))
 		authed.Handle("POST /api/v1/endpoints", HandleCreateEndpoint(cp))
 		authed.Handle("GET /api/v1/endpoints/{id}", HandleGetEndpoint(cp))

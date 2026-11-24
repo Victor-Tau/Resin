@@ -41,6 +41,10 @@ RUN apk add --no-cache ca-certificates tzdata su-exec \
   && chown -R resin:resin /var/cache/resin /var/lib/resin /var/log/resin
 
 COPY --from=go-builder /out/resin /usr/local/bin/resin
+ARG ENABLE_IPV6_ASSIGNMENT=false
+RUN if [ "$ENABLE_IPV6_ASSIGNMENT" = "true" ]; then \
+      apk add --no-cache libcap-setcap && setcap cap_net_admin=ep /usr/local/bin/resin && apk del libcap-setcap; \
+    fi
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

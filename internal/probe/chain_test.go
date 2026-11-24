@@ -10,6 +10,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -20,7 +21,7 @@ func TestUnavailableRelayDoesNotCountAsNodeFailure(t *testing.T) {
 	pool.AddNodeFromSub(hash, raw, "sub")
 	e, _ := pool.GetEntry(hash)
 	storeOutbound(e)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	m := NewProbeManager(ProbeConfig{Pool: pool, Fetcher: func(node.Hash, string) (netutil.OutboundHTTPResult, error) {
 		return netutil.OutboundHTTPResult{}, fmt.Errorf("dial: %w", routing.ErrNoAvailableRelay)
 	}})
@@ -46,7 +47,7 @@ func TestRelayDialFailureProbeOnlyCountsRelay(t *testing.T) {
 				pool.AddNodeFromSub(hash, raw, "s")
 				e, _ := pool.GetEntry(hash)
 				storeOutbound(e)
-				pool.RecordResult(hash, true)
+				healthtest.ProbeEgressOK(pool, hash)
 				return e
 			}
 			landing, relay := add("landing"), add("relay")

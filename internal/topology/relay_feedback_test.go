@@ -9,6 +9,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/platform"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func TestRelayFailureFeedbackAttribution(t *testing.T) {
@@ -25,8 +26,8 @@ func TestRelayFailureFeedbackAttribution(t *testing.T) {
 			relay := addChainMember(pool, relaySub, raw)
 			l, _ := pool.GetEntry(landing)
 			r, _ := pool.GetEntry(relay)
-			pool.RecordResult(landing, true)
-			pool.RecordResult(relay, true)
+			healthtest.ProbeEgressOK(pool, landing)
+			healthtest.ProbeEgressOK(pool, relay)
 			version := l.RoutingVersion()
 			evidence := &node.RelayError{Hash: relay, Version: r.RoutingVersion(), ServerDial: true, Err: io.ErrUnexpectedEOF}
 			feedback := node.Feedback{Result: boolPtr(false), Target: "speed.example", Egress: true}
@@ -45,7 +46,7 @@ func TestRelayFailureFeedbackAttribution(t *testing.T) {
 				pool.RemoveNodeFromSub(relay, relaySub.ID)
 				addChainMember(pool, relaySub, raw)
 				r, _ = pool.GetEntry(relay)
-				pool.RecordResult(relay, true)
+				healthtest.ProbeEgressOK(pool, relay)
 				wantRelay = 0
 			case "stale landing":
 				l.UpdateRoutingRole(node.RoleOrdinary)
@@ -116,9 +117,9 @@ func TestRelaySuccessResetsOnlyMatchingOutbound(t *testing.T) {
 			other := addChainMember(pool, sub, `{"type":"http","server":"other"}`)
 			l, _ := pool.GetEntry(landing)
 			r, _ := pool.GetEntry(relay)
-			pool.RecordResult(landing, true)
-			pool.RecordResult(relay, true)
-			pool.RecordResult(other, true)
+			healthtest.ProbeEgressOK(pool, landing)
+			healthtest.ProbeEgressOK(pool, relay)
+			healthtest.ProbeEgressOK(pool, other)
 			pool.RecordResult(other, false)
 			version := l.RoutingVersion()
 			info := node.RelayInfo{Hash: relay, Version: r.RoutingVersion()}
@@ -134,7 +135,7 @@ func TestRelaySuccessResetsOnlyMatchingOutbound(t *testing.T) {
 				pool.RemoveNodeFromSub(relay, sub.ID)
 				addChainMember(pool, sub, raw)
 				r, _ = pool.GetEntry(relay)
-				pool.RecordResult(relay, true)
+				healthtest.ProbeEgressOK(pool, relay)
 			case "stale landing":
 				l.UpdateRoutingRole(node.RoleChain)
 			case "unknown relay":

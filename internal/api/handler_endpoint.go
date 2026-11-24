@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/Resinat/Resin/internal/localipv6"
 	"github.com/Resinat/Resin/internal/service"
 )
 
@@ -71,4 +72,13 @@ func HandleDeleteEndpoint(cp *service.ControlPlaneService) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func HandleIPv6Interfaces(w http.ResponseWriter, r *http.Request) {
+	interfaces, err := localipv6.Interfaces()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusOK, interfaces)
 }

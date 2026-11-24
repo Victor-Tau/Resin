@@ -20,6 +20,7 @@ import (
 	"github.com/Resinat/Resin/internal/state"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func TestBootstrapRestart_RecoversTopologyAndStickyLease(t *testing.T) {
@@ -102,7 +103,7 @@ func TestBootstrapRestart_RecoversTopologyAndStickyLease(t *testing.T) {
 	if !entry1.HasOutbound() {
 		t.Fatal("node outbound should be initialized on first boot")
 	}
-	pool1.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool1, hash)
 
 	entry1.SetEgressIP(egressIP)
 	entry1.SetEgressRegion("hk")

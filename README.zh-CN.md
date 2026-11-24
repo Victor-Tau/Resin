@@ -109,6 +109,48 @@ services:
 ### 第三步：开始你的代理请求
 客户端接入方式参考接下来的章节。常见场景下，你可以按客户端能力选择 HTTP 正向代理、SOCKS5 正向代理或反向代理。
 
+## 一个 IPv4 SOCKS5 端口为不同账号分配固定 IPv6
+
+Resin 所在的 Linux 服务器需要能通过 IPv6 访问目标，并持有运营商分配并路由到该服务器的前缀。只有 IPv4 的客户端可共用一个 SOCKS5 端口，把目标域名交给 Resin 解析。
+
+1. 在 **接入点** 创建自定义端口，例如 `2234`，开启 SOCKS5。只提供账号代理时，关闭该端口的 HTTP 正向、反向代理和管理页面。
+2. 选择 **SOCKS5 出口网卡**。页面列出该网卡可见的公网前缀。如果运营商单独路由了更大前缀，也可以按其分配记录手填其中的地址。
+3. 为每个用户名填写密码及完整的 IPv6 地址，末尾带 `/64`。例如从文档示例前缀 `2001:db8:1234:5600::/56` 分配 `claude001 → 2001:db8:1234:5601::10/64` 和 `claude002 → 2001:db8:1234:5602::20/64`。实际配置请换成自己的前缀。每个账号独占一个地址，也可以在同一 /64 中分配不同地址。编辑已有账号时密码留空可保留原密码。
+4. 保存后，Resin 在指定网卡添加各账号所需的 /128 地址，并等待内核完成重复地址检测。映射随数据库保存，重启时自动恢复。移除映射时会回收 Resin 本次运行创建且已无接入点使用的地址。
+
+在 IPv4 客户端上分别验证两个账号。以下示例中的 IPv4、用户名和密码应换成实际值。
+
+```bash
+curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude001:passwd1' https://cloudflare.com/cdn-cgi/trace
+curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude002:passwd2' https://cloudflare.com/cdn-cgi/trace
+```
+
+两个响应中的 `ip=` 应分别等于所配地址。映射端口按原始 SOCKS5 用户名验证账号密码，目标需要有可达的 IPv6 地址。普通节点池使用原有身份和路由规则。
+
+账号较多时，可以向管理 API 的 `POST /api/v1/endpoints` 一次提交全部映射，认证使用管理员 Bearer token。示例请求体如下。
+
+```json
+{
+  "port": 2234,
+  "allow_socks5": true,
+  "allow_http_forward": false,
+  "allow_http_reverse": false,
+  "socks5_ipv6_interface": "eth0",
+  "socks5_accounts": [
+    {"username": "claude001", "password": "passwd1", "address": "2001:db8:1234:5601::10/64"},
+    {"username": "claude002", "password": "passwd2", "address": "2001:db8:1234:5602::20/64"}
+  ]
+}
+```
+
+`PATCH /api/v1/endpoints/{id}` 支持替换整个 `socks5_accounts` 列表。批量编辑时应保留仍要使用的用户名，对已有用户名省略 `password` 即可沿用原密码。管理 API 响应只返回用户名和地址。
+
+**Docker 部署**。从本 fork 构建镜像时使用 `docker build --build-arg ENABLE_IPV6_ASSIGNMENT=true -t resin:ipv6 .`。在 Compose 的 Resin 服务下指定 `image: resin:ipv6`、`network_mode: host`、`cap_add: [NET_ADMIN]`，并移除该服务的 `ports` 映射。保留原有令牌环境变量和数据卷。Linux 二进制部署可向 Resin 的 systemd 服务授予 `AmbientCapabilities=CAP_NET_ADMIN`。自动添加地址需要 Resin 进程能管理所选网卡。
+
+### 节点池的定时出口检测和熔断
+
+在 **系统配置** 设置出口检测间隔、最大连续失败次数和恢复所需的连续出口检测成功次数，默认分别为 **24 小时、3 次、2 次**。定时和手动出口检测使用同一计数；只有检测返回有效出口 IP 才累计恢复次数，出口检测失败会清零恢复进度。延迟探测和普通业务成功都不会解除熔断。新加入且尚无失败记录的节点，首次验证出口后即可参与路由。账号固定 IPv6 模式直接使用指定的本地地址。
+
 ## 🟢 基础使用（非粘性代理）
 
 ### 简单接入代理

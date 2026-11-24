@@ -15,6 +15,7 @@ import (
 	"github.com/Resinat/Resin/internal/platform"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func newTestPool(subMgr *SubscriptionManager) *GlobalNodePool {
@@ -250,7 +251,7 @@ func TestPool_PlatformNotifyOnAddRemove(t *testing.T) {
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
 	entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	// Re-add triggers NotifyDirty.
 	pool.AddNodeFromSub(h, raw, "s1")
@@ -305,7 +306,7 @@ func TestPool_NotifyNodeDirty_UpdatesPlatformsInParallel(t *testing.T) {
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
 	entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	plat1 := platform.NewPlatform("p1", "P1", nil, []string{"us"})
 	plat2 := platform.NewPlatform("p2", "P2", nil, []string{"us"})
@@ -383,7 +384,7 @@ func TestPool_RebuildAllPlatforms_UpdatesInParallel(t *testing.T) {
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
 	entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	plat1 := platform.NewPlatform("p1", "P1", nil, []string{"us"})
 	plat2 := platform.NewPlatform("p2", "P2", nil, []string{"us"})
@@ -455,7 +456,7 @@ func TestPool_RegexFilteredPlatform(t *testing.T) {
 		ob := testutil.NewNoopOutbound()
 		entry.Outbound.Store(&ob)
 		entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-		pool.RecordResult(h, true)
+		healthtest.ProbeEgressOK(pool, h)
 		// Re-trigger dirty to pick up latency/outbound.
 		pool.AddNodeFromSub(h, nil, "s1")
 	}
@@ -613,7 +614,7 @@ func TestPool_MakeHealthyAndEnabledEvaluator_ExcludesDisabledNodes(t *testing.T)
 	}
 	healthyOutbound := testutil.NewNoopOutbound()
 	healthyEntry.Outbound.Store(&healthyOutbound)
-	pool.RecordResult(healthyHash, true)
+	healthtest.ProbeEgressOK(pool, healthyHash)
 
 	disabledRaw := json.RawMessage(`{"type":"ss","server":"2.2.2.2"}`)
 	disabledHash := node.HashFromRawOptions(disabledRaw)
@@ -625,7 +626,7 @@ func TestPool_MakeHealthyAndEnabledEvaluator_ExcludesDisabledNodes(t *testing.T)
 	}
 	disabledOutbound := testutil.NewNoopOutbound()
 	disabledEntry.Outbound.Store(&disabledOutbound)
-	pool.RecordResult(disabledHash, true)
+	healthtest.ProbeEgressOK(pool, disabledHash)
 
 	isHealthyAndEnabled := pool.MakeHealthyAndEnabledEvaluator()
 	if !isHealthyAndEnabled(healthyEntry) {
@@ -757,7 +758,7 @@ func TestPool_ReplacePlatform_RebuildsViewBeforePublish(t *testing.T) {
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
 	entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 	pool.NotifyNodeDirty(h)
 
 	// New platform requires "us" in tag. If ReplacePlatform skipped rebuild,

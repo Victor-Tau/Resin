@@ -48,6 +48,8 @@ func (e *NodeEntry) UpdateRoutingRole(role RoutingRole) (bool, []string) {
 		version = nextRoutingVersion.Add(1)
 		e.SetLastError("")
 		e.FailureCount.Store(0)
+		e.EgressFailures.Store(0)
+		e.EgressSuccesses.Store(0)
 		e.CircuitOpenSince.Store(time.Now().UnixNano())
 		e.CircuitGeneration.Add(1)
 		e.egressIP.Store(nil)

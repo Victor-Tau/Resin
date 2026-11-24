@@ -16,6 +16,7 @@ import (
 	"github.com/Resinat/Resin/internal/probe"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func nodeRelayHTTPProxy(t *testing.T) json.RawMessage {
@@ -76,7 +77,7 @@ func TestNodeRelayAllocationUpdatesAfterManualProbe(t *testing.T) {
 				sub.ManagedNodes().StoreNode(hash, subscription.ManagedNode{Tags: []string{tag}})
 				cp.Pool.AddNodeFromSub(hash, raw, sub.ID)
 				mgr.EnsureNodeOutbound(hash)
-				cp.Pool.RecordResult(hash, true)
+				healthtest.ProbeEgressOK(cp.Pool, hash)
 				return hash
 			}
 			landing, relay := add(landingSub, "Exit"), add(relaySub, "Jump")

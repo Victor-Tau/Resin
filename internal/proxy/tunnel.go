@@ -144,8 +144,11 @@ func prepareConnectTunnel(
 }
 
 func prepareDirectConnectTunnel(ctx context.Context, deps tunnelDeps, target string) tunnelPrepareResult {
-	var dialer net.Dialer
-	rawConn, err := dialer.DialContext(ctx, "tcp", target)
+	return dialDirectTunnel(ctx, deps, target, &net.Dialer{}, "tcp")
+}
+
+func dialDirectTunnel(ctx context.Context, deps tunnelDeps, target string, dialer *net.Dialer, network string) tunnelPrepareResult {
+	rawConn, err := dialer.DialContext(ctx, network, target)
 	if err != nil {
 		proxyErr := classifyConnectError(err)
 		if proxyErr == nil {
@@ -266,7 +269,8 @@ func pumpPreparedTunnelReader(
 		result.proxyErr = tunnelCopyError(egressResult.err)
 		result.upstreamStage = "connect_client_to_upstream_copy"
 		result.upstreamErr = egressResult.err
-	case opts.requireBidirectionalTraffic && (ingressResult.n == 0 || egressResult.n == 0):
+	case ingressResult.n == 0 && egressResult.n > 0,
+		opts.requireBidirectionalTraffic && (ingressResult.n == 0 || egressResult.n == 0):
 		result.netOK = false
 		result.proxyErr = ErrUpstreamRequestFailed
 		switch {

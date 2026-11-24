@@ -45,6 +45,8 @@ type NodeEntry struct {
 
 	// Atomic dynamic fields for concurrent hot-path reads.
 	FailureCount      atomic.Int32
+	EgressFailures    atomic.Int64
+	EgressSuccesses   atomic.Int64
 	CircuitOpenSince  atomic.Int64               // unix-nano; 0 = not open
 	CircuitGeneration atomic.Uint64              // advances on each circuit opening; runtime only
 	egressIP          atomic.Pointer[netip.Addr] // nil before first store

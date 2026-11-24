@@ -64,7 +64,7 @@ func (r *StateRepo) GetSystemConfig() (*config.RuntimeConfig, int, error) {
 		}
 		return nil, 0, fmt.Errorf("scan system_config: %w", err)
 	}
-	cfg := &config.RuntimeConfig{}
+	cfg := config.NewDefaultRuntimeConfig()
 	if err := json.Unmarshal([]byte(configJSON), cfg); err != nil {
 		return nil, 0, fmt.Errorf("unmarshal system_config: %w", err)
 	}
@@ -377,14 +377,18 @@ func (r *StateRepo) InsertEndpoint(endpoint model.Endpoint) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	_, err := r.db.Exec(`
+	accountsJSON, err := json.Marshal(endpoint.SOCKS5Accounts)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(`
 		INSERT INTO endpoints (
 			id, port, enabled, allow_management, allow_proxy, require_proxy_auth_info,
-			allow_http_forward, allow_http_reverse, allow_socks5, created_at_ns, updated_at_ns
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			allow_http_forward, allow_http_reverse, allow_socks5, socks5_ipv6_interface, socks5_accounts_json, created_at_ns, updated_at_ns
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, endpoint.ID, endpoint.Port, endpoint.Enabled, endpoint.AllowManagement, endpoint.AllowProxy,
 		endpoint.RequireProxyAuthInfo, endpoint.AllowHTTPForward, endpoint.AllowHTTPReverse,
-		endpoint.AllowSOCKS5, endpoint.CreatedAtNs, endpoint.UpdatedAtNs)
+		endpoint.AllowSOCKS5, endpoint.SOCKS5IPv6Interface, string(accountsJSON), endpoint.CreatedAtNs, endpoint.UpdatedAtNs)
 	if isSQLiteUniqueConstraint(err) {
 		return fmt.Errorf("%w: endpoint id or port already exists", ErrConflict)
 	}
@@ -396,6 +400,10 @@ func (r *StateRepo) UpdateEndpoint(endpoint model.Endpoint) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	accountsJSON, err := json.Marshal(endpoint.SOCKS5Accounts)
+	if err != nil {
+		return err
+	}
 	result, err := r.db.Exec(`
 		UPDATE endpoints SET
 			port = ?,
@@ -406,11 +414,12 @@ func (r *StateRepo) UpdateEndpoint(endpoint model.Endpoint) error {
 			allow_http_forward = ?,
 			allow_http_reverse = ?,
 			allow_socks5 = ?,
+			socks5_ipv6_interface = ?, socks5_accounts_json = ?,
 			updated_at_ns = ?
 		WHERE id = ?
 	`, endpoint.Port, endpoint.Enabled, endpoint.AllowManagement, endpoint.AllowProxy,
 		endpoint.RequireProxyAuthInfo, endpoint.AllowHTTPForward, endpoint.AllowHTTPReverse,
-		endpoint.AllowSOCKS5, endpoint.UpdatedAtNs, endpoint.ID)
+		endpoint.AllowSOCKS5, endpoint.SOCKS5IPv6Interface, string(accountsJSON), endpoint.UpdatedAtNs, endpoint.ID)
 	if isSQLiteUniqueConstraint(err) {
 		return fmt.Errorf("%w: endpoint port already exists", ErrConflict)
 	}
@@ -444,7 +453,7 @@ func (r *StateRepo) DeleteEndpoint(id string) error {
 func (r *StateRepo) GetEndpoint(id string) (*model.Endpoint, error) {
 	row := r.db.QueryRow(`
 		SELECT id, port, enabled, allow_management, allow_proxy, require_proxy_auth_info,
-		       allow_http_forward, allow_http_reverse, allow_socks5, created_at_ns, updated_at_ns
+		       allow_http_forward, allow_http_reverse, allow_socks5, socks5_ipv6_interface, socks5_accounts_json, created_at_ns, updated_at_ns
 		FROM endpoints WHERE id = ?
 	`, id)
 	endpoint, err := scanEndpoint(row.Scan)
@@ -461,7 +470,7 @@ func (r *StateRepo) GetEndpoint(id string) (*model.Endpoint, error) {
 func (r *StateRepo) ListEndpoints() ([]model.Endpoint, error) {
 	rows, err := r.db.Query(`
 		SELECT id, port, enabled, allow_management, allow_proxy, require_proxy_auth_info,
-		       allow_http_forward, allow_http_reverse, allow_socks5, created_at_ns, updated_at_ns
+		       allow_http_forward, allow_http_reverse, allow_socks5, socks5_ipv6_interface, socks5_accounts_json, created_at_ns, updated_at_ns
 		FROM endpoints ORDER BY port ASC
 	`)
 	if err != nil {
@@ -485,6 +494,7 @@ type endpointScanner func(dest ...any) error
 func scanEndpoint(scan endpointScanner) (model.Endpoint, error) {
 	var endpoint model.Endpoint
 	var enabled, allowManagement, allowProxy, requireProxyAuthInfo int
+	var accountsJSON string
 	var allowHTTPForward, allowHTTPReverse, allowSOCKS5 int
 	err := scan(
 		&endpoint.ID,
@@ -496,10 +506,14 @@ func scanEndpoint(scan endpointScanner) (model.Endpoint, error) {
 		&allowHTTPForward,
 		&allowHTTPReverse,
 		&allowSOCKS5,
+		&endpoint.SOCKS5IPv6Interface, &accountsJSON,
 		&endpoint.CreatedAtNs,
 		&endpoint.UpdatedAtNs,
 	)
 	if err != nil {
+		return model.Endpoint{}, err
+	}
+	if err := json.Unmarshal([]byte(accountsJSON), &endpoint.SOCKS5Accounts); err != nil {
 		return model.Endpoint{}, err
 	}
 	endpoint.Enabled = enabled != 0

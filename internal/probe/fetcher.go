@@ -55,6 +55,9 @@ func DirectFetcher(timeout func() time.Duration) Fetcher {
 		requestDone := time.Now()
 		defer resp.Body.Close()
 
+		if url == EgressTraceURL && resp.StatusCode != http.StatusOK {
+			return netutil.OutboundHTTPResult{}, fmt.Errorf("egress probe: unexpected HTTP status %d", resp.StatusCode)
+		}
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return netutil.OutboundHTTPResult{}, fmt.Errorf("probe: read body: %w", err)

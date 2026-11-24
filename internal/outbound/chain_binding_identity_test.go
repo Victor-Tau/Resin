@@ -12,6 +12,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
@@ -64,7 +65,7 @@ func TestChainBindingSameHashReplacementCannotAuthorizeOldEntry(t *testing.T) {
 		native := &bindingIdentityOutbound{Outbound: testutil.NewNoopOutbound()}
 		var ob adapter.Outbound = native
 		e.Outbound.Store(&ob)
-		base.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(base, hash)
 		return e, native
 	}
 	old, oldNative := add()

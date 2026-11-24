@@ -11,12 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Resinat/Resin/internal/localipv6"
 	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/proxy"
 	"github.com/Resinat/Resin/internal/service"
 )
 
 type managedEndpointRuntime struct {
+	mappings map[localipv6.Mapping]bool // guarded by manager.mu
 	config   atomic.Pointer[model.Endpoint]
 	server   *inboundDemuxServer
 	listener net.Listener
@@ -44,6 +46,7 @@ type endpointRuntimeManager struct {
 	tokenAPI      http.Handler
 	socks5        inboundConnHandler
 	metricsSink   proxy.MetricsEventSink
+	ipv6Addresses map[localipv6.Mapping]func() error
 	runtimes      map[string]*managedEndpointRuntime
 	statuses      map[string]service.EndpointRuntimeStatus
 	started       bool
@@ -67,6 +70,7 @@ func newEndpointRuntimeManager(
 		tokenAPI:      tokenAPI,
 		socks5:        socks5,
 		metricsSink:   metricsSink,
+		ipv6Addresses: make(map[localipv6.Mapping]func() error),
 		runtimes:      make(map[string]*managedEndpointRuntime),
 		statuses:      make(map[string]service.EndpointRuntimeStatus),
 		serverErrCh:   make(chan error, 1),
@@ -83,7 +87,27 @@ func (m *endpointRuntimeManager) ApplyEndpoint(endpoint model.Endpoint) error {
 		return net.ErrClosed
 	}
 
+	defer m.releaseUnusedIPv6Locked()
+	mappings := make(map[localipv6.Mapping]bool, len(endpoint.SOCKS5Accounts))
+	if (endpoint.SOCKS5IPv6Interface == "") != (len(endpoint.SOCKS5Accounts) == 0) {
+		return fmt.Errorf("IPv6 mapping requires an interface and accounts")
+	}
+	for _, account := range endpoint.SOCKS5Accounts {
+		mapping, err := localipv6.ParseMapping(endpoint.SOCKS5IPv6Interface, account.Address.String())
+		if err != nil {
+			return err
+		}
+		mappings[mapping] = true
+		if _, exists := m.ipv6Addresses[mapping]; !exists {
+			release, err := mapping.Acquire()
+			if err != nil {
+				return err
+			}
+			m.ipv6Addresses[mapping] = release
+		}
+	}
 	if current := m.runtimes[endpoint.ID]; current != nil && current.current().Port == endpoint.Port {
+		current.mappings = mappings
 		copy := endpoint
 		current.config.Store(&copy)
 		if current.started {
@@ -103,7 +127,7 @@ func (m *endpointRuntimeManager) ApplyEndpoint(endpoint model.Endpoint) error {
 	}
 	listener = proxy.NewCountingListener(listener, m.metricsSink)
 
-	runtime := &managedEndpointRuntime{listener: listener}
+	runtime := &managedEndpointRuntime{listener: listener, mappings: mappings}
 	copy := endpoint
 	runtime.config.Store(&copy)
 	currentConfig := func() model.Endpoint { return runtime.current() }
@@ -132,6 +156,29 @@ func (m *endpointRuntimeManager) ApplyEndpoint(endpoint model.Endpoint) error {
 	return nil
 }
 
+// Release only addresses installed by this manager after their last endpoint is removed.
+func (m *endpointRuntimeManager) releaseUnusedIPv6Locked() {
+	for mapping, release := range m.ipv6Addresses {
+		inUse := false
+		for _, runtime := range m.runtimes {
+			if runtime.mappings[mapping] {
+				inUse = true
+				break
+			}
+		}
+		if inUse {
+			continue
+		}
+		if release != nil {
+			if err := release(); err != nil {
+				log.Printf("release IPv6 %s on %s: %v", mapping.Address, mapping.Interface, err)
+				continue
+			}
+		}
+		delete(m.ipv6Addresses, mapping)
+	}
+}
+
 func (m *endpointRuntimeManager) RemoveEndpoint(id string) {
 	if m == nil {
 		return
@@ -140,6 +187,7 @@ func (m *endpointRuntimeManager) RemoveEndpoint(id string) {
 	runtime := m.runtimes[id]
 	delete(m.runtimes, id)
 	delete(m.statuses, id)
+	m.releaseUnusedIPv6Locked()
 	m.mu.Unlock()
 	if runtime != nil {
 		// Release the port before returning so a following start can rebind it.
@@ -204,6 +252,7 @@ func (m *endpointRuntimeManager) handleRuntimeError(runtime *managedEndpointRunt
 	m.mu.Lock()
 	if m.runtimes[endpoint.ID] == runtime {
 		delete(m.runtimes, endpoint.ID)
+		m.releaseUnusedIPv6Locked()
 		m.statuses[endpoint.ID] = service.EndpointRuntimeStatus{State: "error", LastError: err.Error()}
 	}
 	stopping := m.stopping
@@ -242,6 +291,9 @@ func (m *endpointRuntimeManager) Shutdown(ctx context.Context) error {
 		}(runtime)
 	}
 	wg.Wait()
+	m.mu.Lock()
+	m.releaseUnusedIPv6Locked()
+	m.mu.Unlock()
 	close(errCh)
 	var shutdownErrs []error
 	for err := range errCh {
@@ -278,6 +330,7 @@ func (g *endpointSocksGate) ServeConnContext(ctx context.Context, conn net.Conn)
 		return
 	}
 	ctx = proxy.ContextWithInboundPolicy(ctx, proxy.InboundPolicy{
+		SOCKS5Accounts:       endpoint.SOCKS5Accounts,
 		RequireProxyAuthInfo: endpoint.RequireProxyAuthInfo,
 	})
 	g.next.ServeConnContext(ctx, conn)

@@ -77,6 +77,9 @@ func TestChainRequestLogFollowsActualConnection(t *testing.T) {
 		e, _ := pool.GetEntry(h)
 		ip, latency := netip.MustParseAddr("203.0.113.1"), time.Millisecond
 		pool.ApplyFeedback(h, e.RoutingVersion(), node.Feedback{Result: &success, Egress: true, IP: &ip, Target: "example.com", Latency: &latency})
+		if success && e.IsCircuitOpen() {
+			pool.ApplyFeedback(h, e.RoutingVersion(), node.Feedback{Result: &success, Egress: true, IP: &ip, Target: "example.com", Latency: &latency})
+		}
 	}
 	ha, hb := add(relaySub, a.raw(), "A"), add(relaySub, b.raw(), "B")
 	h := add(landSub, landing.raw(), "exit")

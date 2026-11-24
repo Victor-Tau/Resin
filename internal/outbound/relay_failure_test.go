@@ -16,6 +16,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
@@ -49,7 +50,7 @@ func testChainServerDialFailure(t *testing.T, fastOpen bool) {
 		sub.ManagedNodes().StoreNode(hash, subscription.ManagedNode{})
 		pool.AddNodeFromSub(hash, raw, sub.ID)
 		mgr.EnsureNodeOutbound(hash)
-		pool.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(pool, hash)
 		entry, _ := pool.GetEntry(hash)
 		return entry
 	}

@@ -1,0 +1,2 @@
+ALTER TABLE nodes_dynamic ADD COLUMN egress_failures INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE nodes_dynamic ADD COLUMN egress_successes INTEGER NOT NULL DEFAULT 0;

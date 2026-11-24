@@ -18,6 +18,7 @@ import (
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -74,7 +75,7 @@ func newProxyE2EEnvFromSubscriptionURL(t *testing.T, subURL string) *proxyE2EEnv
 		pool.UpdateNodeEgressIP(hash, &ip, nil)
 		latency := 20 * time.Millisecond
 		pool.RecordLatency(hash, "example.com", &latency)
-		pool.RecordResult(hash, true)
+		healthtest.ProbeEgressOK(pool, hash)
 		return true
 	})
 	if nodeCount == 0 {

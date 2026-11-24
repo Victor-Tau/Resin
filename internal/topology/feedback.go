@@ -59,6 +59,10 @@ func (p *GlobalNodePool) applyFeedback(hash node.Hash, version uint64, f node.Fe
 		f.Result = nil
 	}
 	threshold := p.currentMaxConsecutiveFailures()
+	recovery := 2
+	if p.recoverySuccesses != nil {
+		recovery = p.recoverySuccesses()
+	}
 	domain := netutil.ExtractDomain(f.Target)
 	authority := p.isAuthorityDomain(domain)
 	decay := 30 * time.Second
@@ -73,15 +77,34 @@ func (p *GlobalNodePool) applyFeedback(hash node.Hash, version uint64, f node.Fe
 			return e, xsync.CancelOp
 		}
 		applied = true
+		// A failed egress attempt interrupts a recovery streak even when its
+		// failure is attributed to the relay rather than to this landing.
+		if f.Egress && f.Result == nil && f.Err != nil && !errors.Is(f.Err, context.Canceled) {
+			e.EgressSuccesses.Store(0)
+		}
 		if f.Result != nil {
 			before := e.IsCircuitOpen()
 			if *f.Result {
-				dynamic = e.FailureCount.Swap(0) != 0
-				dynamic = e.CircuitOpenSince.Swap(0) != 0 || dynamic
+				if f.Egress && f.IP != nil && f.IP.IsValid() {
+					e.EgressFailures.Store(0)
+					// A new, unfailed node needs its first verified IP for admission.
+					firstAdmission := e.FailureCount.Load() == 0
+					if before && (firstAdmission || e.EgressSuccesses.Add(1) >= int64(recovery)) {
+						e.CircuitOpenSince.Store(0)
+						e.EgressSuccesses.Store(0)
+					}
+				}
+				if !e.IsCircuitOpen() {
+					dynamic = e.FailureCount.Swap(0) != 0 || before
+				}
 			} else {
-				count := e.FailureCount.Add(1)
+				count := int64(e.FailureCount.Add(1))
+				if f.Egress {
+					e.EgressSuccesses.Store(0)
+					count = max(count, e.EgressFailures.Add(1))
+				}
 				dynamic = true
-				if threshold > 0 && int(count) >= threshold {
+				if threshold > 0 && count >= int64(threshold) {
 					if e.CircuitOpenSince.CompareAndSwap(0, time.Now().UnixNano()) {
 						e.CircuitGeneration.Add(1)
 					}
@@ -157,6 +180,7 @@ func (p *GlobalNodePool) SnapshotNodeDynamic(hash node.Hash) *model.NodeDynamic 
 			result = &model.NodeDynamic{
 				Hash: hash.Hex(), ChainProxy: e.RoutingRole() == node.RoleChain,
 				FailureCount: int(e.FailureCount.Load()), CircuitOpenSince: e.CircuitOpenSince.Load(),
+				EgressFailures: e.EgressFailures.Load(), EgressSuccesses: e.EgressSuccesses.Load(),
 				EgressIP: ip, EgressRegion: e.GetEgressRegion(), EgressUpdatedAtNs: e.LastEgressUpdate.Load(),
 				LastLatencyProbeAttemptNs:          e.LastLatencyProbeAttempt.Load(),
 				LastAuthorityLatencyProbeAttemptNs: e.LastAuthorityLatencyProbeAttempt.Load(),

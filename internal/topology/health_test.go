@@ -11,6 +11,7 @@ import (
 	"github.com/Resinat/Resin/internal/platform"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 )
 
 func newHealthTestPool(maxFailures int) (*GlobalNodePool, *SubscriptionManager) {
@@ -45,7 +46,7 @@ func TestRecordResult_CircuitBreak(t *testing.T) {
 	entry, _ := pool.GetEntry(h)
 
 	// New node starts circuit-open; mark one success to bring it to healthy state.
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 	if entry.IsCircuitOpen() {
 		t.Fatal("node should recover after first success")
 	}
@@ -80,7 +81,11 @@ func TestRecordResult_Recovery(t *testing.T) {
 	}
 
 	// Success → resets.
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
+	if !entry.IsCircuitOpen() {
+		t.Fatal("only one verified egress sample")
+	}
+	healthtest.ProbeEgressOK(pool, h)
 	if entry.IsCircuitOpen() {
 		t.Fatal("should not be circuit-open after success")
 	}
@@ -106,7 +111,7 @@ func TestRecordResult_MaxConsecutiveFailuresPulled(t *testing.T) {
 
 	h := addTestNode(pool, sub, `{"type":"ss","n":"pull-threshold"}`)
 	entry, _ := pool.GetEntry(h)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 	if entry.IsCircuitOpen() {
 		t.Fatal("node should recover after first success")
 	}
@@ -138,9 +143,9 @@ func TestRecordResult_DynamicCallback_OnActualChange(t *testing.T) {
 	h := node.HashFromRawOptions([]byte(raw))
 	pool.AddNodeFromSub(h, []byte(raw), "s1")
 
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 	pool.RecordResult(h, false)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	// New node starts circuit-open: first success recovers, then failure and success mutate again.
 	if count.Load() != 3 {
@@ -173,7 +178,7 @@ func TestRecordResult_CircuitBreak_RemovesFromView(t *testing.T) {
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
 	entry.SetEgressIP(netip.MustParseAddr("1.2.3.4"))
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 	pool.RebuildAllPlatforms()
 
 	if plat.View().Size() != 1 {
@@ -188,7 +193,11 @@ func TestRecordResult_CircuitBreak_RemovesFromView(t *testing.T) {
 	}
 
 	// Recover → back in view.
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
+	if !entry.IsCircuitOpen() {
+		t.Fatal("only one verified egress sample")
+	}
+	healthtest.ProbeEgressOK(pool, h)
 	if plat.View().Size() != 1 {
 		t.Fatal("recovered node should be back in view")
 	}
@@ -199,7 +208,7 @@ func TestRecordPassiveResult_DisabledPlatformSkipsFailures(t *testing.T) {
 	sub := subMgr.Lookup("s1")
 	h := addTestNode(pool, sub, `{"type":"ss","n":"passive-disabled"}`)
 	entry, _ := pool.GetEntry(h)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	plat := platform.NewPlatform("p1", "NoPassiveBreaker", nil, nil)
 	plat.PassiveCircuitBreakerDisabled = true
@@ -226,7 +235,7 @@ func TestRecordPassiveResult_EnabledPlatformCountsFailures(t *testing.T) {
 	sub := subMgr.Lookup("s1")
 	h := addTestNode(pool, sub, `{"type":"ss","n":"passive-enabled"}`)
 	entry, _ := pool.GetEntry(h)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	plat := platform.NewPlatform("p1", "PassiveBreaker", nil, nil)
 	plat.PassiveCircuitBreakerDisabled = false
@@ -455,7 +464,7 @@ func TestUpdateNodeEgressIP_LocStateMachine(t *testing.T) {
 	})
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	ip := netip.MustParseAddr("1.2.3.4")
 	locJP := "jp"

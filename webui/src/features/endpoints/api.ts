@@ -14,6 +14,8 @@ function normalizeEndpoint(raw: Endpoint): Endpoint {
     allow_http_forward: Boolean(raw.allow_http_forward),
     allow_http_reverse: Boolean(raw.allow_http_reverse),
     allow_socks5: Boolean(raw.allow_socks5),
+    socks5_ipv6_interface: raw.socks5_ipv6_interface || "",
+    socks5_accounts: raw.socks5_accounts ?? [],
     source: raw.source || "database",
     read_only: Boolean(raw.read_only),
     status: raw.status || "inactive",
@@ -63,4 +65,8 @@ export async function deleteEndpoint(id: string): Promise<void> {
   await apiRequest<void>(`${basePath}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+export function listIPv6Interfaces() {
+  return apiRequest<{ name: string; prefixes: string[] }[]>("/api/v1/system/ipv6-interfaces");
 }

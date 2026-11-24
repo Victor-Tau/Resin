@@ -15,6 +15,7 @@ import (
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -50,7 +51,7 @@ func makeRoutableNode(t testing.TB, pool *topology.GlobalNodePool, subMgr *topol
 
 	// Record latency
 	entry.LatencyTable.Update(latDomain, latency, 10*time.Minute)
-	pool.RecordResult(h, true)
+	healthtest.ProbeEgressOK(pool, h)
 
 	// Trigger platform re-evaluation
 	pool.NotifyNodeDirty(h)

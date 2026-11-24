@@ -131,6 +131,7 @@ func TestMigrateStateDB_ConvertsLegacyRegexFiltersToMustRules(t *testing.T) {
 	_, err = db.Exec(`
 		CREATE TABLE schema_migrations (version uint64 NOT NULL PRIMARY KEY, dirty bool NOT NULL);
 		INSERT INTO schema_migrations (version, dirty) VALUES (8, 0);
+		CREATE TABLE endpoints (id TEXT PRIMARY KEY);
 		CREATE TABLE subscriptions (id TEXT PRIMARY KEY);
 		CREATE TABLE platforms (
 			id TEXT PRIMARY KEY,

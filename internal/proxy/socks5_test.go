@@ -7,9 +7,12 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"testing"
 	"time"
 
+	"github.com/Resinat/Resin/internal/model"
+	"github.com/Resinat/Resin/internal/node"
 	M "github.com/sagernet/sing/common/metadata"
 )
 
@@ -943,4 +946,121 @@ func TestSocks5Inbound_HandshakeTimeoutInterruptsStalledSession(t *testing.T) {
 	}
 
 	_ = clientConn.Close()
+}
+
+func TestSocks5NoResponseTripsNodeCircuit(t *testing.T) {
+	env := newProxyE2EEnv(t)
+	setProxyE2EOutboundDialFunc(t, env, func(context.Context, string, M.Socksaddr) (net.Conn, error) {
+		client, upstream := net.Pipe()
+		go func() {
+			defer upstream.Close()
+			_, _ = io.ReadFull(upstream, make([]byte, 1))
+		}()
+		return client, nil
+	})
+	events := newMockEventEmitter()
+	s := NewSocks5Inbound(Socks5InboundConfig{Router: env.router, Pool: env.pool, Health: env.pool, Events: events, ProxyToken: "pw"})
+	for range 3 {
+		client, reader, done := startSocks5Session(t, s)
+		_ = client.SetDeadline(time.Now().Add(3 * time.Second))
+		writeAll(t, client, []byte{5, 1, 2})
+		readExactly(t, reader, 2)
+		writeAll(t, client, socks5UserPassPacket("plat.acct", "pw"))
+		readExactly(t, reader, 2)
+		writeAll(t, client, socks5ConnectIPv4Packet("127.0.0.1:80"))
+		if reply := readExactly(t, reader, 10); reply[1] != 0 {
+			t.Fatalf("SOCKS5 reply %v", reply)
+		}
+		writeAll(t, client, []byte("x"))
+		<-done
+		_ = client.Close()
+		event := <-events.logCh
+		if event.NetOK || event.UpstreamStage != "connect_no_ingress_traffic" {
+			t.Fatalf("unexpected tunnel outcome: %+v", event)
+		}
+	}
+	entryHash := node.HashFromRawOptions([]byte(`{"type":"stub","server":"127.0.0.1","server_port":1}`))
+	entry, _ := env.pool.GetEntry(entryHash)
+	deadline := time.Now().Add(time.Second)
+	for !entry.IsCircuitOpen() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !entry.IsCircuitOpen() {
+		t.Fatal("three empty upstream responses did not open the circuit")
+	}
+}
+
+func TestSocks5MappedAccountUsesIPv6Source(t *testing.T) {
+	target, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback unavailable: %v", err)
+	}
+	defer target.Close()
+	server, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	account := model.IPv6Account{Address: netip.MustParsePrefix("::1/128")}
+	if err := account.SetPassword("alice-password"); err != nil {
+		t.Fatal(err)
+	}
+	policy := InboundPolicy{SOCKS5Accounts: map[string]model.IPv6Account{"alice": account}}
+	s := NewSocks5Inbound(Socks5InboundConfig{ProxyToken: "global"})
+	ctx := ContextWithInboundPolicy(context.Background(), policy)
+	for _, tc := range []struct {
+		name, user, password string
+		accepted             bool
+	}{
+		{"unknown", "bob", "alice-password", false},
+		{"global token", "alice", "global", false},
+		{"IPv4-only destination", "alice", "alice-password", true},
+		{"mapped user", "alice", "alice-password", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, err := net.Dial("tcp4", server.Addr().String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+			peer, err := server.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			go s.ServeConnContext(ctx, peer)
+			writeAll(t, conn, []byte{5, 2, 0, 2})
+			if got := readExactly(t, conn, 2); got[1] != 2 {
+				t.Fatalf("authentication method %v", got)
+			}
+			writeAll(t, conn, socks5UserPassPacket(tc.user, tc.password))
+			if got := readExactly(t, conn, 2); (got[1] == 0) != tc.accepted {
+				t.Fatalf("authentication %v", got)
+			}
+			if !tc.accepted {
+				return
+			}
+			if tc.name == "IPv4-only destination" {
+				writeAll(t, conn, socks5ConnectIPv4Packet(server.Addr().String()))
+				if got := readExactly(t, conn, 10); got[1] == socks5ReplySucceeded {
+					t.Fatal("IPv4-only destination fell back to IPv4")
+				}
+				return
+			}
+			port := target.Addr().(*net.TCPAddr).Port
+			request := append([]byte{5, 1, 0, 4}, net.IPv6loopback...)
+			writeAll(t, conn, append(request, byte(port>>8), byte(port)))
+			if got := readExactly(t, conn, 22); got[1] != 0 || got[3] != 4 {
+				t.Fatalf("connect reply %v", got)
+			}
+			upstream, err := target.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer upstream.Close()
+			if addr := upstream.RemoteAddr().(*net.TCPAddr).AddrPort().Addr(); addr != account.Address.Addr() {
+				t.Fatalf("egress source %s", addr)
+			}
+		})
+	}
 }

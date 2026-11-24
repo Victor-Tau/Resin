@@ -22,6 +22,7 @@ type RuntimeConfigForm = {
   reverse_proxy_log_resp_headers_max_bytes: string;
   reverse_proxy_log_resp_body_max_bytes: string;
   max_consecutive_failures: string;
+  recovery_successes: string;
   max_latency_test_interval: string;
   max_authority_latency_test_interval: string;
   max_egress_test_interval: string;
@@ -41,6 +42,7 @@ const EDITABLE_FIELDS: Array<keyof RuntimeConfig> = [
   "reverse_proxy_log_resp_headers_max_bytes",
   "reverse_proxy_log_resp_body_max_bytes",
   "max_consecutive_failures",
+  "recovery_successes",
   "max_latency_test_interval",
   "max_authority_latency_test_interval",
   "max_egress_test_interval",
@@ -60,6 +62,7 @@ const FIELD_LABELS: Record<keyof RuntimeConfig, string> = {
   reverse_proxy_log_resp_headers_max_bytes: "响应头最大字节数",
   reverse_proxy_log_resp_body_max_bytes: "响应体最大字节数",
   max_consecutive_failures: "最大连续失败次数",
+  recovery_successes: "熔断恢复所需连续出口检测成功次数",
   max_latency_test_interval: "节点延迟最大测试间隔",
   max_authority_latency_test_interval: "权威域名最大测试间隔",
   max_egress_test_interval: "出口 IP 更新检查间隔",
@@ -97,6 +100,7 @@ function configToForm(config: RuntimeConfig): RuntimeConfigForm {
     reverse_proxy_log_resp_headers_max_bytes: String(config.reverse_proxy_log_resp_headers_max_bytes),
     reverse_proxy_log_resp_body_max_bytes: String(config.reverse_proxy_log_resp_body_max_bytes),
     max_consecutive_failures: String(config.max_consecutive_failures),
+    recovery_successes: String(config.recovery_successes),
     max_latency_test_interval: config.max_latency_test_interval,
     max_authority_latency_test_interval: config.max_authority_latency_test_interval,
     max_egress_test_interval: config.max_egress_test_interval,
@@ -151,6 +155,10 @@ function parseForm(form: RuntimeConfigForm): RuntimeConfig {
     throw new Error("延迟测试目标 URL 必须是 http/https 地址");
   }
 
+  const recoverySuccesses = parseNonNegativeInt("熔断恢复所需连续出口检测成功次数", form.recovery_successes);
+  if (recoverySuccesses < 1) {
+    throw new Error(i18next.t("熔断恢复次数至少为 1"));
+  }
   return {
     request_log_enabled: form.request_log_enabled,
     reverse_proxy_log_detail_enabled: form.reverse_proxy_log_detail_enabled,
@@ -168,6 +176,7 @@ function parseForm(form: RuntimeConfigForm): RuntimeConfig {
       form.reverse_proxy_log_resp_body_max_bytes,
     ),
     max_consecutive_failures: parseNonNegativeInt("最大连续失败次数", form.max_consecutive_failures),
+    recovery_successes: recoverySuccesses,
     max_latency_test_interval: parseDurationField("节点延迟最大测试间隔", form.max_latency_test_interval),
     max_authority_latency_test_interval: parseDurationField(
       "权威域名最大测试间隔",
@@ -473,6 +482,21 @@ export function SystemConfigPage() {
                       min={0}
                       value={form.max_consecutive_failures}
                       onChange={(event) => setFormField("max_consecutive_failures", event.target.value)}
+                    />
+                  </div>
+                  <div className="field-group">
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <label className="field-label" htmlFor="sys-recovery" style={{ margin: 0 }}>
+                        {t("熔断恢复所需连续出口检测成功次数")}
+                      </label>
+                      {renderRestoreButton("recovery_successes")}
+                    </div>
+                    <Input
+                      id="sys-recovery"
+                      type="number"
+                      min={1}
+                      value={form.recovery_successes}
+                      onChange={(event) => setFormField("recovery_successes", event.target.value)}
                     />
                   </div>
                 </div>

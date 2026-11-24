@@ -20,6 +20,7 @@ import (
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
@@ -71,7 +72,7 @@ func newProxyE2EEnv(t *testing.T) *proxyE2EEnv {
 		t.Fatal("latency table should be initialized")
 	}
 	entry.LatencyTable.Update("example.com", 20*time.Millisecond, 10*time.Minute)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 
 	pool.NotifyNodeDirty(hash)
 	if !plat.View().Contains(hash) {

@@ -1,10 +1,15 @@
 package proxy
 
-import "context"
+import (
+	"context"
+
+	"github.com/Resinat/Resin/internal/model"
+)
 
 // InboundPolicy carries endpoint-specific behavior into shared proxy handlers.
 type InboundPolicy struct {
 	RequireProxyAuthInfo bool
+	SOCKS5Accounts       map[string]model.IPv6Account
 }
 
 type inboundPolicyContextKey struct{}

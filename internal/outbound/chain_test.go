@@ -17,6 +17,7 @@ import (
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/routing"
 	"github.com/Resinat/Resin/internal/subscription"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
@@ -120,7 +121,7 @@ func TestChainProxyRealRelaySwitchAndRoleChange(t *testing.T) {
 		t.Fatal("missing relay fell back to a direct landing connection")
 	}
 	a, b := add(jumpSub, jumpA.raw(t)), add(jumpSub, jumpB.raw(t))
-	pool.RecordResult(a, true)
+	healthtest.ProbeEgressOK(pool, a)
 	fetch := func() {
 		t.Helper()
 		body, _, err := mgr.Fetch(context.Background(), h, target.URL)
@@ -130,7 +131,7 @@ func TestChainProxyRealRelaySwitchAndRoleChange(t *testing.T) {
 	}
 	fetch()
 	const stableFetches = 8
-	pool.RecordResult(b, true)
+	healthtest.ProbeEgressOK(pool, b)
 	picksBefore := picks.Load()
 	for i := 0; i < stableFetches; i++ {
 		fetch()

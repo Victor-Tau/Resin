@@ -880,7 +880,7 @@ func TestProbeSync_EmitsProbeEvents(t *testing.T) {
 		Pool: pool,
 		Fetcher: func(_ node.Hash, url string) (netutil.OutboundHTTPResult, error) {
 			switch url {
-			case egressTraceURL:
+			case EgressTraceURL:
 				return netutil.OutboundHTTPResult{Body: []byte("ip=198.51.100.10"), Latency: 20 * time.Millisecond}, nil
 			default:
 				return netutil.OutboundHTTPResult{Body: []byte("ok"), Latency: 30 * time.Millisecond}, nil
@@ -974,4 +974,44 @@ func TestParseCloudflareTrace_NoIP(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when ip field is missing")
 	}
+}
+
+func TestEgressProbeConsecutiveFailuresAndRecovery(t *testing.T) {
+	pool := topology.NewGlobalNodePool(topology.PoolConfig{MaxConsecutiveFailures: func() int { return 3 }, RecoverySuccesses: func() int { return 2 }})
+	raw := []byte(`{"type":"test"}`)
+	h := node.HashFromRawOptions(raw)
+	pool.AddNodeFromSub(h, raw, "sub")
+	e, _ := pool.GetEntry(h)
+	body := "ip=203.0.113.1"
+	m := NewProbeManager(ProbeConfig{Pool: pool, Fetcher: func(node.Hash, string) (netutil.OutboundHTTPResult, error) {
+		return netutil.OutboundHTTPResult{Body: []byte(body)}, nil
+	}})
+	defer m.Stop()
+	probe := func(response string, open bool) {
+		t.Helper()
+		body = response
+		_, _, err := m.performEgressProbe(h)
+		if (err != nil) != (body == "invalid") || e.IsCircuitOpen() != open {
+			t.Fatalf("body=%q err=%v open=%v, want open=%v", body, err, e.IsCircuitOpen(), open)
+		}
+	}
+	const valid = "ip=2001:db8::1"
+	probe(valid, false)
+	for i := range 3 {
+		probe("invalid", i == 2)
+		if err := m.performLatencyProbe(h, "https://latency.test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !e.IsCircuitOpen() {
+		t.Fatal("latency recovered broken egress")
+	}
+	probe(valid, true)
+	pool.RecordPassiveResult("p", h, true)
+	if !e.IsCircuitOpen() {
+		t.Fatal("passive result recovered broken egress")
+	}
+	probe("invalid", true)
+	probe(valid, true)
+	probe(valid, false)
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/outbound"
 	"github.com/Resinat/Resin/internal/routing"
 )
@@ -99,8 +100,9 @@ func (s *Socks5Inbound) ServeConnContext(baseCtx context.Context, conn net.Conn)
 	handshakePhase := startSocks5HandshakePhase(handshakeCtx, conn)
 	defer handshakePhase.Stop()
 
-	requireAuthInfo := InboundPolicyFromContext(baseCtx).RequireProxyAuthInfo && s.token == ""
-	handshake := s.performHandshake(conn, reader, requireAuthInfo)
+	policy := InboundPolicyFromContext(baseCtx)
+	requireAuthInfo := policy.RequireProxyAuthInfo && s.token == "" || len(policy.SOCKS5Accounts) > 0
+	handshake := s.performHandshake(conn, reader, requireAuthInfo, policy.SOCKS5Accounts)
 	if !handshake.ok {
 		return
 	}
@@ -117,13 +119,21 @@ func (s *Socks5Inbound) ServeConnContext(baseCtx context.Context, conn net.Conn)
 	lifecycle.setAccount(handshake.account)
 	defer lifecycle.finish()
 
-	prepare := prepareConnectTunnel(
-		baseCtx,
-		s.tunnel,
-		handshake.platformName,
-		handshake.account,
-		handshake.target,
-	)
+	var prepare tunnelPrepareResult
+	if len(policy.SOCKS5Accounts) > 0 {
+		source := policy.SOCKS5Accounts[handshake.account].Address.Addr()
+		lifecycle.log.EgressIP = source.String()
+		dialer := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.IP(source.AsSlice())}}
+		prepare = dialDirectTunnel(baseCtx, s.tunnel, handshake.target, &dialer, "tcp6")
+	} else {
+		prepare = prepareConnectTunnel(
+			baseCtx,
+			s.tunnel,
+			handshake.platformName,
+			handshake.account,
+			handshake.target,
+		)
+	}
 	if prepare.route.PlatformID != "" {
 		lifecycle.setRouteResult(prepare.route)
 		lifecycle.setRelayInfo(prepare.relay)
@@ -160,10 +170,12 @@ func (s *Socks5Inbound) ServeConnContext(baseCtx context.Context, conn net.Conn)
 		lifecycle.setUpstreamError(relay.upstreamStage, relay.upstreamErr)
 	}
 	lifecycle.setNetOK(relay.netOK)
-	prepare.session.recordResult(relay.netOK, relay.upstreamErr)
+	if !relay.netOK || relay.ingressBytes > 0 {
+		prepare.session.recordResult(relay.netOK, relay.upstreamErr)
+	}
 }
 
-func (s *Socks5Inbound) performHandshake(conn net.Conn, reader *bufio.Reader, requireAuthInfo bool) socks5HandshakeResult {
+func (s *Socks5Inbound) performHandshake(conn net.Conn, reader *bufio.Reader, requireAuthInfo bool, accounts map[string]model.IPv6Account) socks5HandshakeResult {
 	method, ok := s.negotiateMethod(conn, reader, requireAuthInfo)
 	if !ok {
 		return socks5HandshakeResult{}
@@ -172,7 +184,7 @@ func (s *Socks5Inbound) performHandshake(conn net.Conn, reader *bufio.Reader, re
 	result := socks5HandshakeResult{ok: true}
 	if method == socks5MethodUserPass {
 		var authOK bool
-		result.platformName, result.account, authOK = s.authenticateUserPass(conn, reader, requireAuthInfo)
+		result.platformName, result.account, authOK = s.authenticateUserPass(conn, reader, requireAuthInfo, accounts)
 		if !authOK {
 			return socks5HandshakeResult{}
 		}
@@ -281,7 +293,7 @@ func (s *Socks5Inbound) negotiateMethod(conn net.Conn, reader *bufio.Reader, req
 	return selected, true
 }
 
-func (s *Socks5Inbound) authenticateUserPass(conn net.Conn, reader *bufio.Reader, requireAuthInfo bool) (string, string, bool) {
+func (s *Socks5Inbound) authenticateUserPass(conn net.Conn, reader *bufio.Reader, requireAuthInfo bool, accounts map[string]model.IPv6Account) (string, string, bool) {
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return "", "", false
@@ -305,7 +317,12 @@ func (s *Socks5Inbound) authenticateUserPass(conn net.Conn, reader *bufio.Reader
 		return "", "", false
 	}
 
-	if s.token != "" && string(password) != s.token {
+	if len(accounts) > 0 {
+		if account, known := accounts[string(username)]; !known || !account.Authenticate(password) {
+			_, _ = conn.Write([]byte{socks5UserPassVersion, socks5UserPassStatusFailure})
+			return "", "", false
+		}
+	} else if s.token != "" && string(password) != s.token {
 		_, _ = conn.Write([]byte{socks5UserPassVersion, socks5UserPassStatusFailure})
 		return "", "", false
 	}
@@ -318,6 +335,9 @@ func (s *Socks5Inbound) authenticateUserPass(conn net.Conn, reader *bufio.Reader
 		return "", "", false
 	}
 
+	if len(accounts) > 0 {
+		return "", string(username), true
+	}
 	platformName, account := parseV1PlatformAccountIdentity(string(username))
 	return platformName, account, true
 }

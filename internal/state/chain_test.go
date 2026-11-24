@@ -13,6 +13,13 @@ func TestSubscriptionChainMigrationAndConstraints(t *testing.T) {
 	if err := repo.UpsertSubscription(sub); err != nil {
 		t.Fatal(err)
 	}
+	endpointDown, err := migrationsFS.ReadFile("migrations/state/000011_endpoint_ipv6.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.db.Exec(string(endpointDown)); err != nil {
+		t.Fatal(err)
+	}
 	// Recreate a real pre-feature version and upgrade its existing row.
 	down, err := migrationsFS.ReadFile("migrations/state/000010_subscription_chain_proxy.down.sql")
 	if err != nil {
@@ -53,11 +60,11 @@ func TestSubscriptionChainMigrationAndConstraints(t *testing.T) {
 
 func TestCachedNodeRetainsOutboundMode(t *testing.T) {
 	repo := newTestCacheRepo(t)
-	if err := repo.BulkUpsertNodesDynamic([]model.NodeDynamic{{Hash: "chain", ChainProxy: true}}); err != nil {
+	if err := repo.BulkUpsertNodesDynamic([]model.NodeDynamic{{Hash: "chain", ChainProxy: true, EgressSuccesses: 1, EgressFailures: 0}}); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := repo.LoadAllNodesDynamic()
-	if err != nil || len(rows) != 1 || !rows[0].ChainProxy {
+	if err != nil || len(rows) != 1 || !rows[0].ChainProxy || rows[0].EgressSuccesses != 1 {
 		t.Fatalf("mode round trip: %v %v", rows, err)
 	}
 }
@@ -66,6 +73,13 @@ func TestCacheChainMigrationPreservesMeasurements(t *testing.T) {
 	repo := newTestCacheRepo(t)
 	down, err := migrationsFS.ReadFile("migrations/cache/000003_nodes_dynamic_chain_proxy.down.sql")
 	if err != nil {
+		t.Fatal(err)
+	}
+	streakDown, err := migrationsFS.ReadFile("migrations/cache/000004_egress_streaks.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.db.Exec(string(streakDown)); err != nil {
 		t.Fatal(err)
 	}
 	// Recreate version 2 with real measurements predating this feature.
@@ -92,7 +106,7 @@ func TestCacheChainMigrationPreservesMeasurements(t *testing.T) {
 		t.Fatalf("migrated latency: %v, error=%v", latencies, err)
 	}
 	var version int
-	if err := repo.db.QueryRow("SELECT version FROM schema_migrations").Scan(&version); err != nil || version != 3 {
+	if err := repo.db.QueryRow("SELECT version FROM schema_migrations").Scan(&version); err != nil || version != 4 {
 		t.Fatalf("cache version=%d, error=%v", version, err)
 	}
 	if _, err := repo.db.Exec(string(down)); err != nil {

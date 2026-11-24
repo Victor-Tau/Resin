@@ -13,6 +13,7 @@ import (
 
 	"github.com/Resinat/Resin/internal/netutil"
 	"github.com/Resinat/Resin/internal/node"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/sagernet/sing-box/adapter"
 	M "github.com/sagernet/sing/common/metadata"
 )
@@ -39,7 +40,8 @@ func TestChainBindingDoesNotReviveAfterEitherCircuit(t *testing.T) {
 			if !n.BoundRelay().IsZero() || broken.CircuitGeneration.Load() != generation+1 {
 				t.Fatal("circuit opening left the old binding valid")
 			}
-			pool.RecordResult(broken.Hash, true)
+			healthtest.ProbeEgressOK(pool, broken.Hash)
+			healthtest.ProbeEgressOK(pool, broken.Hash)
 			if !n.BoundRelay().IsZero() {
 				t.Fatal("recovery revived a binding invalidated by circuit opening")
 			}
@@ -104,6 +106,11 @@ func TestChainRecoveryFailureRevokesItsOwnBinding(t *testing.T) {
 	}
 	success := true
 	pool.ApplyFeedback(landing.Hash, landing.RoutingVersion(), node.Feedback{Result: &success, Relay: result.Relay})
+	if !landing.IsCircuitOpen() {
+		t.Fatal("traffic success closed the circuit")
+	}
+	healthtest.ProbeEgressOK(pool, landing.Hash)
+	healthtest.ProbeEgressOK(pool, landing.Hash)
 	if landing.IsCircuitOpen() || n.upstream.relay.Load() != replacement {
 		t.Fatal("successful recovery did not retain the replacement binding")
 	}

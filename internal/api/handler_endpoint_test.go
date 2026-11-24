@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Resinat/Resin/internal/model"
@@ -130,4 +131,41 @@ func TestHandleEndpointEnableAndDisableWithPatch(t *testing.T) {
 		t.Fatalf("start missing status: got %d, want %d, body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 	assertErrorCode(t, rec, "NOT_FOUND")
+}
+
+func TestEndpointIPv6AccountsPersistWithoutExposingCredentials(t *testing.T) {
+	srv, cp, _ := newControlPlaneTestServer(t)
+	create := doJSONRequest(t, srv, http.MethodPost, "/api/v1/endpoints", map[string]any{
+		"port": 2234, "enabled": false, "socks5_ipv6_interface": "eth0",
+		"socks5_accounts": []map[string]string{{"username": "alice", "password": "secret-one", "address": "2001:db8:100:2101::5/64"}},
+	}, true)
+	if create.Code != 201 {
+		t.Fatalf("create %d %s", create.Code, create.Body.String())
+	}
+	var response service.EndpointResponse
+	if err := json.Unmarshal(create.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(create.Body.String(), "password") || strings.Contains(create.Body.String(), "secret-one") {
+		t.Fatal("response exposed credentials")
+	}
+	path := "/api/v1/endpoints/" + response.ID
+	rows := []map[string]string{{"username": "alice", "address": "2001:db8:100:2102::5/64"}, {"username": "bob", "password": "secret-two", "address": "2001:db8:100:2101::5/64"}}
+	patch := doJSONRequest(t, srv, http.MethodPatch, path, map[string]any{"socks5_accounts": rows}, true)
+	if patch.Code != 200 {
+		t.Fatalf("patch %d %s", patch.Code, patch.Body.String())
+	}
+	saved, err := cp.Engine.GetEndpoint(response.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alice, bob := saved.SOCKS5Accounts["alice"], saved.SOCKS5Accounts["bob"]
+	if !alice.Authenticate([]byte("secret-one")) || alice.Authenticate([]byte("secret-two")) || !bob.Authenticate([]byte("secret-two")) || alice.Address.String() != rows[0]["address"] {
+		t.Fatal("stored account mapping or password mismatch")
+	}
+	rows[1]["address"] = rows[0]["address"]
+	invalid := doJSONRequest(t, srv, http.MethodPatch, path, map[string]any{"socks5_accounts": rows}, true)
+	if invalid.Code != 400 {
+		t.Fatalf("duplicate source returned %d", invalid.Code)
+	}
 }

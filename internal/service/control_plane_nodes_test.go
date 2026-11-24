@@ -14,6 +14,7 @@ import (
 	"github.com/Resinat/Resin/internal/probe"
 	"github.com/Resinat/Resin/internal/subscription"
 	"github.com/Resinat/Resin/internal/testutil"
+	"github.com/Resinat/Resin/internal/testutil/healthtest"
 	"github.com/Resinat/Resin/internal/topology"
 )
 
@@ -62,7 +63,7 @@ func addRoutableNodeForSubscriptionWithTag(
 	entry.LatencyTable.Update("example.com", 25*time.Millisecond, 10*time.Minute)
 	ob := testutil.NewNoopOutbound()
 	entry.Outbound.Store(&ob)
-	pool.RecordResult(hash, true)
+	healthtest.ProbeEgressOK(pool, hash)
 	pool.NotifyNodeDirty(hash)
 	return hash
 }

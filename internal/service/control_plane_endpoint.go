@@ -1,15 +1,19 @@
 package service
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
+	"reflect"
+	"slices"
 	"time"
 
-	"github.com/google/uuid"
-
+	"github.com/Resinat/Resin/internal/localipv6"
 	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/state"
+	"github.com/google/uuid"
 )
 
 const DefaultEndpointID = "default"
@@ -27,36 +31,48 @@ type EndpointRuntime interface {
 	EndpointStatus(id string) EndpointRuntimeStatus
 }
 
+type SOCKS5Account struct {
+	Password string `json:"password,omitempty"`
+	Username string `json:"username"`
+	Address  string `json:"address"`
+}
+
 type EndpointResponse struct {
-	ID                   string `json:"id"`
-	Port                 int    `json:"port"`
-	Enabled              bool   `json:"enabled"`
-	AllowManagement      bool   `json:"allow_management"`
-	AllowProxy           bool   `json:"allow_proxy"`
-	RequireProxyAuthInfo bool   `json:"require_proxy_auth_info"`
-	AllowHTTPForward     bool   `json:"allow_http_forward"`
-	AllowHTTPReverse     bool   `json:"allow_http_reverse"`
-	AllowSOCKS5          bool   `json:"allow_socks5"`
-	Source               string `json:"source"`
-	ReadOnly             bool   `json:"read_only"`
-	Status               string `json:"status"`
-	LastError            string `json:"last_error,omitempty"`
-	CreatedAt            string `json:"created_at,omitempty"`
-	UpdatedAt            string `json:"updated_at,omitempty"`
+	SOCKS5IPv6Interface  string          `json:"socks5_ipv6_interface"`
+	SOCKS5Accounts       []SOCKS5Account `json:"socks5_accounts"`
+	ID                   string          `json:"id"`
+	Port                 int             `json:"port"`
+	Enabled              bool            `json:"enabled"`
+	AllowManagement      bool            `json:"allow_management"`
+	AllowProxy           bool            `json:"allow_proxy"`
+	RequireProxyAuthInfo bool            `json:"require_proxy_auth_info"`
+	AllowHTTPForward     bool            `json:"allow_http_forward"`
+	AllowHTTPReverse     bool            `json:"allow_http_reverse"`
+	AllowSOCKS5          bool            `json:"allow_socks5"`
+	Source               string          `json:"source"`
+	ReadOnly             bool            `json:"read_only"`
+	Status               string          `json:"status"`
+	LastError            string          `json:"last_error,omitempty"`
+	CreatedAt            string          `json:"created_at,omitempty"`
+	UpdatedAt            string          `json:"updated_at,omitempty"`
 }
 
 type CreateEndpointRequest struct {
-	Port                 int   `json:"port"`
-	Enabled              *bool `json:"enabled,omitempty"`
-	AllowManagement      *bool `json:"allow_management,omitempty"`
-	AllowProxy           *bool `json:"allow_proxy,omitempty"`
-	RequireProxyAuthInfo *bool `json:"require_proxy_auth_info,omitempty"`
-	AllowHTTPForward     *bool `json:"allow_http_forward,omitempty"`
-	AllowHTTPReverse     *bool `json:"allow_http_reverse,omitempty"`
-	AllowSOCKS5          *bool `json:"allow_socks5,omitempty"`
+	SOCKS5IPv6Interface  string          `json:"socks5_ipv6_interface"`
+	SOCKS5Accounts       []SOCKS5Account `json:"socks5_accounts"`
+	Port                 int             `json:"port"`
+	Enabled              *bool           `json:"enabled,omitempty"`
+	AllowManagement      *bool           `json:"allow_management,omitempty"`
+	AllowProxy           *bool           `json:"allow_proxy,omitempty"`
+	RequireProxyAuthInfo *bool           `json:"require_proxy_auth_info,omitempty"`
+	AllowHTTPForward     *bool           `json:"allow_http_forward,omitempty"`
+	AllowHTTPReverse     *bool           `json:"allow_http_reverse,omitempty"`
+	AllowSOCKS5          *bool           `json:"allow_socks5,omitempty"`
 }
 
 var endpointPatchAllowedFields = map[string]bool{
+	"socks5_ipv6_interface":   true,
+	"socks5_accounts":         true,
 	"enabled":                 true,
 	"port":                    true,
 	"allow_management":        true,
@@ -108,6 +124,7 @@ func (s *ControlPlaneService) endpointResponse(endpoint model.Endpoint, source s
 		}
 	}
 	response := EndpointResponse{
+		SOCKS5IPv6Interface:  endpoint.SOCKS5IPv6Interface,
 		ID:                   endpoint.ID,
 		Port:                 endpoint.Port,
 		Enabled:              endpoint.Enabled,
@@ -122,6 +139,11 @@ func (s *ControlPlaneService) endpointResponse(endpoint model.Endpoint, source s
 		Status:               status.State,
 		LastError:            status.LastError,
 	}
+	response.SOCKS5Accounts = make([]SOCKS5Account, 0, len(endpoint.SOCKS5Accounts))
+	for name, account := range endpoint.SOCKS5Accounts {
+		response.SOCKS5Accounts = append(response.SOCKS5Accounts, SOCKS5Account{Username: name, Address: account.Address.String()})
+	}
+	slices.SortFunc(response.SOCKS5Accounts, func(a, b SOCKS5Account) int { return cmp.Compare(a.Username, b.Username) })
 	if endpoint.CreatedAtNs > 0 {
 		response.CreatedAt = time.Unix(0, endpoint.CreatedAtNs).UTC().Format(time.RFC3339Nano)
 	}
@@ -137,6 +159,14 @@ func (s *ControlPlaneService) validateEndpoint(endpoint model.Endpoint) *Service
 	}
 	if endpoint.ID != DefaultEndpointID && endpoint.Port == s.defaultEndpoint().Port {
 		return conflict("port is reserved by the default endpoint")
+	}
+	if len(endpoint.SOCKS5Accounts) > 0 || endpoint.SOCKS5IPv6Interface != "" {
+		if !endpoint.AllowProxy || !endpoint.AllowSOCKS5 {
+			return invalidArg("IPv6 mapping requires SOCKS5")
+		}
+		if endpoint.SOCKS5IPv6Interface == "" || len(endpoint.SOCKS5Accounts) == 0 {
+			return invalidArg("IPv6 mapping requires an interface and at least one account")
+		}
 	}
 	if !endpoint.AllowManagement && !endpoint.AllowProxy {
 		return invalidArg("at least one of allow_management or allow_proxy must be enabled")
@@ -207,6 +237,7 @@ func (s *ControlPlaneService) CreateEndpoint(req CreateEndpointRequest) (*Endpoi
 	allowProxy := boolOrDefault(req.AllowProxy, true)
 	now := time.Now().UnixNano()
 	endpoint := model.Endpoint{
+		SOCKS5IPv6Interface:  req.SOCKS5IPv6Interface,
 		ID:                   uuid.New().String(),
 		Port:                 req.Port,
 		Enabled:              boolOrDefault(req.Enabled, true),
@@ -218,6 +249,9 @@ func (s *ControlPlaneService) CreateEndpoint(req CreateEndpointRequest) (*Endpoi
 		AllowSOCKS5:          boolOrDefault(req.AllowSOCKS5, allowProxy),
 		CreatedAtNs:          now,
 		UpdatedAtNs:          now,
+	}
+	if err := setSOCKS5Accounts(&endpoint, req.SOCKS5Accounts); err != nil {
+		return nil, err
 	}
 	if err := s.validateEndpoint(endpoint); err != nil {
 		return nil, err
@@ -234,7 +268,7 @@ func (s *ControlPlaneService) CreateEndpoint(req CreateEndpointRequest) (*Endpoi
 			if rollbackErr := s.Engine.DeleteEndpoint(endpoint.ID); rollbackErr != nil {
 				return nil, internal("rollback endpoint after listener failure", errors.Join(err, rollbackErr))
 			}
-			return nil, conflict(fmt.Sprintf("listen on port %d: %v", endpoint.Port, err))
+			return nil, conflict(fmt.Sprintf("activate port %d: %v", endpoint.Port, err))
 		}
 	}
 	response := s.endpointResponse(endpoint, "database", false)
@@ -268,6 +302,22 @@ func (s *ControlPlaneService) UpdateEndpoint(id string, patchJSON json.RawMessag
 		return nil, internal("get endpoint", err)
 	}
 	next := *current
+	if v, ok, err := patch.optionalString("socks5_ipv6_interface"); err != nil {
+		return nil, err
+	} else if ok {
+		next.SOCKS5IPv6Interface = v
+	}
+	if _, ok := patch["socks5_accounts"]; ok {
+		var input struct {
+			Accounts []SOCKS5Account `json:"socks5_accounts"`
+		}
+		if err := json.Unmarshal(patchJSON, &input); err != nil {
+			return nil, invalidArg("invalid socks5_accounts")
+		}
+		if err := setSOCKS5Accounts(&next, input.Accounts); err != nil {
+			return nil, err
+		}
+	}
 	if value, ok, parseErr := patch.optionalInt("port"); parseErr != nil {
 		return nil, parseErr
 	} else if ok {
@@ -297,7 +347,7 @@ func (s *ControlPlaneService) UpdateEndpoint(id string, patchJSON json.RawMessag
 	if validationErr := s.validateEndpoint(next); validationErr != nil {
 		return nil, validationErr
 	}
-	if next == *current {
+	if reflect.DeepEqual(next, *current) {
 		response := s.endpointResponse(*current, "database", false)
 		return &response, nil
 	}
@@ -319,7 +369,7 @@ func (s *ControlPlaneService) UpdateEndpoint(id string, patchJSON json.RawMessag
 			if rollbackErr := s.Engine.UpdateEndpoint(*current); rollbackErr != nil {
 				return nil, internal("rollback endpoint after listener failure", errors.Join(applyErr, rollbackErr))
 			}
-			return nil, conflict(fmt.Sprintf("listen on port %d: %v", next.Port, applyErr))
+			return nil, conflict(fmt.Sprintf("activate port %d: %v", next.Port, applyErr))
 		}
 	} else if s.EndpointRuntime != nil {
 		s.EndpointRuntime.RemoveEndpoint(next.ID)
@@ -346,5 +396,36 @@ func (s *ControlPlaneService) DeleteEndpoint(id string) error {
 	if s.EndpointRuntime != nil {
 		s.EndpointRuntime.RemoveEndpoint(id)
 	}
+	return nil
+}
+
+func setSOCKS5Accounts(endpoint *model.Endpoint, input []SOCKS5Account) *ServiceError {
+	accounts := make(map[string]model.IPv6Account, len(input))
+	used := make(map[netip.Addr]bool, len(input))
+	for _, row := range input {
+		if len(row.Username) == 0 || len(row.Username) > 255 {
+			return invalidArg("SOCKS5 username must be 1–255 bytes")
+		}
+		mapping, err := localipv6.ParseMapping(endpoint.SOCKS5IPv6Interface, row.Address)
+		if err != nil {
+			return invalidArg(err.Error())
+		}
+		if _, ok := accounts[row.Username]; ok || used[mapping.Address] {
+			return invalidArg("each account needs a unique username and IPv6 address")
+		}
+		used[mapping.Address] = true
+		account := endpoint.SOCKS5Accounts[row.Username]
+		if row.Password == "" && account.PasswordHash == "" || len(row.Password) > 255 {
+			return invalidArg("new SOCKS5 passwords must be 1–255 bytes")
+		}
+		if row.Password != "" {
+			if err := account.SetPassword(row.Password); err != nil {
+				return internal("hash SOCKS5 password", err)
+			}
+		}
+		account.Address = netip.PrefixFrom(mapping.Address, 64)
+		accounts[row.Username] = account
+	}
+	endpoint.SOCKS5Accounts = accounts
 	return nil
 }

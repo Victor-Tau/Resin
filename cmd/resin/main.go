@@ -227,6 +227,7 @@ func newTopologyRuntime(
 			engine.MarkNodeLatency(hash.Hex(), domain)
 		},
 		MaxLatencyTableEntries: envCfg.MaxLatencyTableEntries,
+		RecoverySuccesses:      func() int { return runtimeConfigSnapshot(runtimeCfg).RecoverySuccesses },
 		MaxConsecutiveFailures: func() int {
 			return runtimeConfigSnapshot(runtimeCfg).MaxConsecutiveFailures
 		},
@@ -268,7 +269,7 @@ func newTopologyRuntime(
 				return netutil.OutboundHTTPResult{}, outbound.ErrOutboundNotReady
 			}
 			return netutil.HTTPGetViaOutbound(ctx, *outboundPtr, url, netutil.OutboundHTTPOptions{
-				RequireStatusOK: false,
+				RequireStatusOK: url == probe.EgressTraceURL,
 				OnConnLifecycle: func(op netutil.ConnLifecycleOp) {
 					if onProbeConnLifecycle != nil {
 						onProbeConnLifecycle(op)
@@ -814,6 +815,8 @@ func restoreBootstrapNodeDynamics(
 		}
 		entry.RestoreRoutingMode(nd.ChainProxy)
 		entry.FailureCount.Store(int32(nd.FailureCount))
+		entry.EgressFailures.Store(nd.EgressFailures)
+		entry.EgressSuccesses.Store(nd.EgressSuccesses)
 		entry.CircuitOpenSince.Store(nd.CircuitOpenSince)
 		entry.LastLatencyProbeAttempt.Store(nd.LastLatencyProbeAttemptNs)
 		entry.LastAuthorityLatencyProbeAttempt.Store(nd.LastAuthorityLatencyProbeAttemptNs)

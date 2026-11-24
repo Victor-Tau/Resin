@@ -76,7 +76,7 @@ type ProbeManager struct {
 }
 
 const (
-	egressTraceURL        = "https://cloudflare.com/cdn-cgi/trace"
+	EgressTraceURL        = "https://cloudflare.com/cdn-cgi/trace"
 	egressTraceDomain     = "cloudflare.com"
 	defaultLatencyTestURL = "https://www.gstatic.com/generate_204"
 	defaultQueueCap       = 1024
@@ -830,7 +830,7 @@ func (m *ProbeManager) performEgressProbe(hash node.Hash) (netip.Addr, egressPro
 		return netip.Addr{}, egressProbeFetchError, fmt.Errorf("node not found")
 	}
 	version := entry.RoutingVersion()
-	result, err := m.fetcher(hash, egressTraceURL)
+	result, err := m.fetcher(hash, EgressTraceURL)
 	message := ""
 	success := err == nil
 	f := node.Feedback{Egress: true, LastError: &message, Err: err, Relay: result.Relay}
@@ -849,6 +849,10 @@ func (m *ProbeManager) performEgressProbe(hash node.Hash) (netip.Addr, egressPro
 	if err == nil {
 		f.IP = &ip
 		f.Region = loc
+	} else {
+		success = false
+		message = err.Error()
+		f.Err = err
 	}
 	m.pool.ApplyFeedback(hash, version, f)
 	if err != nil {
