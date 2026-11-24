@@ -306,11 +306,11 @@ If you are a developer and want AI to help modify an existing project for native
 
 ## Build and publish with GitHub Actions
 
-GitHub-hosted Ubuntu runners build releases for this fork. Deployment hosts download a release archive or pull the GHCR image. The current release is [v1.6.1](doc/release-notes/v1.6.1.md).
+GitHub-hosted Ubuntu runners build releases for this fork. Deployment hosts download a release archive or pull the GHCR image. The current release is [v1.6.2](doc/release-notes/v1.6.2.md).
 
-1. Run `npm version 1.6.1 --no-git-tag-version --ignore-scripts` in `webui/` to update the package and lockfile versions. Substitute the new version on subsequent releases.
-2. Write the matching notes in `doc/release-notes/v1.6.1.md`, update the README version links, and commit the changes to `master`.
-3. Run `git tag v1.6.1`, then `git push --atomic origin master v1.6.1`. The tag starts the [Release workflow](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml).
+1. Run `npm version 1.6.2 --no-git-tag-version --ignore-scripts` in `webui/` to update the package and lockfile versions. Substitute the new version on subsequent releases.
+2. Write the matching notes in `doc/release-notes/v1.6.2.md`, update the README version links, and commit the changes to `master`.
+3. Run `git tag v1.6.2`, then `git push --atomic origin master v1.6.2`. The tag starts the [Release workflow](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml).
 4. Check the five binary builds, release upload, and Docker image jobs. The workflow embeds the tag and commit in each binary. After deployment, the authenticated `GET /api/v1/system/info` endpoint reports both values. Archives cover Linux and macOS on amd64 and arm64, and Windows on amd64.
 
 ## Other Deployment Options

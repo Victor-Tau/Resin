@@ -147,7 +147,7 @@ curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude002:passwd2' https://
 **Docker 部署**。在单核服务器上，可以复用 GitHub Actions 发布的镜像。要让容器内的 Resin 用户自动添加 IPv6，用下面的 `Dockerfile.ipv6` 为已编译好的程序设置文件能力。
 
 ```dockerfile
-FROM ghcr.io/victor-tau/resin:1.6.1
+FROM ghcr.io/victor-tau/resin:1.6.2
 RUN apk add --no-cache libcap-setcap \
     && setcap cap_net_admin=ep /usr/local/bin/resin \
     && apk del libcap-setcap
@@ -342,11 +342,11 @@ curl "http://127.0.0.1:2260/my-token/MyPlatform/https/api.example.com/v1/orders"
 
 ## 通过 GitHub Actions 编译和发布
 
-本 fork 的正式版本由 GitHub 托管的 Ubuntu runner 编译。部署服务器只需下载对应架构的 Release 附件或拉取 GHCR 镜像。当前版本为 [v1.6.1](doc/release-notes/v1.6.1.md)。
+本 fork 的正式版本由 GitHub 托管的 Ubuntu runner 编译。部署服务器只需下载对应架构的 Release 附件或拉取 GHCR 镜像。当前版本为 [v1.6.2](doc/release-notes/v1.6.2.md)。
 
-1. 在 `webui/` 下运行 `npm version 1.6.1 --no-git-tag-version --ignore-scripts`，同步 `package.json` 和锁文件。下次发布时，请把命令中的版本号换成新版本。
-2. 在 `doc/release-notes/v1.6.1.md` 写入同版本的发布说明，更新 README 的版本链接，将改动提交到 `master`。
-3. 在该提交上执行 `git tag v1.6.1` 和 `git push --atomic origin master v1.6.1`。标签会触发 [Release 工作流](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml)。
+1. 在 `webui/` 下运行 `npm version 1.6.2 --no-git-tag-version --ignore-scripts`，同步 `package.json` 和锁文件。下次发布时，请把命令中的版本号换成新版本。
+2. 在 `doc/release-notes/v1.6.2.md` 写入同版本的发布说明，更新 README 的版本链接，将改动提交到 `master`。
+3. 在该提交上执行 `git tag v1.6.2` 和 `git push --atomic origin master v1.6.2`。标签会触发 [Release 工作流](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml)。
 4. 在 Actions 页面确认五个二进制构建、Release 附件发布和 Docker 镜像发布均成功。工作流把 Git 标签和提交号写入二进制，部署后可通过已认证的 `GET /api/v1/system/info` 核对。Linux 和 macOS 提供 amd64、arm64，Windows 提供 amd64。
 
 ## 其他部署方式
