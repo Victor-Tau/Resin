@@ -11,6 +11,23 @@ import (
 type IPv6Account struct {
 	Address      netip.Prefix `json:"address"`
 	PasswordHash string       `json:"password_hash"`
+	Interface    string       `json:"-"` // Runtime override for independently configured accounts.
+}
+
+type IPv6Config struct {
+	ID          string
+	PrefixID    string
+	Username    string
+	Account     IPv6Account
+	EndpointIDs []string
+}
+
+type IPv6Prefix struct {
+	ID         string       `json:"id"`
+	Label      string       `json:"label"`
+	Interface  string       `json:"interface"`
+	Prefix     netip.Prefix `json:"prefix"`
+	ProxyCount int          `json:"proxy_count"`
 }
 
 func (a *IPv6Account) SetPassword(password string) error {

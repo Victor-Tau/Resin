@@ -160,13 +160,8 @@ func (s *ControlPlaneService) validateEndpoint(endpoint model.Endpoint) *Service
 	if endpoint.ID != DefaultEndpointID && endpoint.Port == s.defaultEndpoint().Port {
 		return conflict("port is reserved by the default endpoint")
 	}
-	if len(endpoint.SOCKS5Accounts) > 0 || endpoint.SOCKS5IPv6Interface != "" {
-		if !endpoint.AllowProxy || !endpoint.AllowSOCKS5 {
-			return invalidArg("IPv6 mapping requires SOCKS5")
-		}
-		if endpoint.SOCKS5IPv6Interface == "" || len(endpoint.SOCKS5Accounts) == 0 {
-			return invalidArg("IPv6 mapping requires an interface and at least one account")
-		}
+	if (endpoint.SOCKS5IPv6Interface == "") != (len(endpoint.SOCKS5Accounts) == 0) {
+		return invalidArg("IPv6 mapping requires an interface and at least one account")
 	}
 	if !endpoint.AllowManagement && !endpoint.AllowProxy {
 		return invalidArg("at least one of allow_management or allow_proxy must be enabled")
@@ -263,7 +258,7 @@ func (s *ControlPlaneService) CreateEndpoint(req CreateEndpointRequest) (*Endpoi
 		return nil, internal("persist endpoint", err)
 	}
 	if endpoint.Enabled && s.EndpointRuntime != nil {
-		if err := s.EndpointRuntime.ApplyEndpoint(endpoint); err != nil {
+		if err := s.EndpointRuntime.ApplyEndpoint(endpointForSOCKS5(endpoint)); err != nil {
 			s.EndpointRuntime.RemoveEndpoint(endpoint.ID)
 			if rollbackErr := s.Engine.DeleteEndpoint(endpoint.ID); rollbackErr != nil {
 				return nil, internal("rollback endpoint after listener failure", errors.Join(err, rollbackErr))
@@ -351,7 +346,16 @@ func (s *ControlPlaneService) UpdateEndpoint(id string, patchJSON json.RawMessag
 		response := s.endpointResponse(*current, "database", false)
 		return &response, nil
 	}
+	configs, err := s.Engine.ListIPv6Configs()
+	if err != nil {
+		return nil, internal("list IPv6 configurations", err)
+	}
+	effective, err := EndpointWithIPv6Configs(next, configs)
+	if err != nil {
+		return nil, conflict(err.Error())
+	}
 	next.UpdatedAtNs = time.Now().UnixNano()
+	effective.UpdatedAtNs = next.UpdatedAtNs
 	if err := s.Engine.UpdateEndpoint(next); err != nil {
 		if errors.Is(err, state.ErrConflict) {
 			return nil, conflict("endpoint port already exists")
@@ -362,7 +366,7 @@ func (s *ControlPlaneService) UpdateEndpoint(id string, patchJSON json.RawMessag
 		return nil, internal("persist endpoint", err)
 	}
 	if next.Enabled && s.EndpointRuntime != nil {
-		if applyErr := s.EndpointRuntime.ApplyEndpoint(next); applyErr != nil {
+		if applyErr := s.EndpointRuntime.ApplyEndpoint(effective); applyErr != nil {
 			if !current.Enabled {
 				s.EndpointRuntime.RemoveEndpoint(next.ID)
 			}

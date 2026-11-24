@@ -89,11 +89,15 @@ func (m *endpointRuntimeManager) ApplyEndpoint(endpoint model.Endpoint) error {
 
 	defer m.releaseUnusedIPv6Locked()
 	mappings := make(map[localipv6.Mapping]bool, len(endpoint.SOCKS5Accounts))
-	if (endpoint.SOCKS5IPv6Interface == "") != (len(endpoint.SOCKS5Accounts) == 0) {
-		return fmt.Errorf("IPv6 mapping requires an interface and accounts")
+	if endpoint.SOCKS5IPv6Interface != "" && len(endpoint.SOCKS5Accounts) == 0 {
+		return fmt.Errorf("IPv6 mapping requires an account")
 	}
 	for _, account := range endpoint.SOCKS5Accounts {
-		mapping, err := localipv6.ParseMapping(endpoint.SOCKS5IPv6Interface, account.Address.String())
+		iface := account.Interface
+		if iface == "" {
+			iface = endpoint.SOCKS5IPv6Interface
+		}
+		mapping, err := localipv6.ParseMapping(iface, account.Address.String())
 		if err != nil {
 			return err
 		}

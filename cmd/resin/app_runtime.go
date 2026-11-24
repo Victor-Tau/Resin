@@ -18,6 +18,7 @@ import (
 	"github.com/Resinat/Resin/internal/config"
 	"github.com/Resinat/Resin/internal/geoip"
 	"github.com/Resinat/Resin/internal/metrics"
+	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/netutil"
 	"github.com/Resinat/Resin/internal/node"
 	"github.com/Resinat/Resin/internal/proxy"
@@ -458,11 +459,7 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 		a.metricsManager,
 	)
 	cpService.EndpointRuntime = endpointManager
-	defaultEndpoint := service.NewDefaultEndpoint(a.envCfg.ResinPort)
-	if err := endpointManager.ApplyEndpoint(defaultEndpoint); err != nil {
-		return fmt.Errorf("default endpoint listen: %w", err)
-	}
-	if err := restorePersistedEndpoints(engine, endpointManager); err != nil {
+	if err := restorePersistedEndpoints(engine, endpointManager, service.NewDefaultEndpoint(a.envCfg.ResinPort)); err != nil {
 		endpointManager.RemoveEndpoint(service.DefaultEndpointID)
 		return fmt.Errorf("load endpoints: %w", err)
 	}
@@ -471,16 +468,39 @@ func (a *resinApp) buildNetworkServers(engine *state.StateEngine) error {
 	return nil
 }
 
-func restorePersistedEndpoints(engine *state.StateEngine, endpointManager *endpointRuntimeManager) error {
+func restorePersistedEndpoints(engine *state.StateEngine, endpointManager *endpointRuntimeManager, defaultEndpoint model.Endpoint) error {
 	customEndpoints, err := engine.ListEndpoints()
 	if err != nil {
 		return err
+	}
+	configs, err := engine.ListIPv6Configs()
+	if err != nil {
+		return err
+	}
+	defaultConfig, err := service.EndpointWithIPv6Configs(defaultEndpoint, configs)
+	if err != nil {
+		return err
+	}
+	if err := endpointManager.ApplyEndpoint(defaultConfig); err != nil {
+		if len(defaultConfig.SOCKS5Accounts) == 0 {
+			return fmt.Errorf("default endpoint listen: %w", err)
+		}
+		// Keep the management API available when a persisted source address cannot be installed.
+		log.Printf("Default endpoint SOCKS5 disabled: %v", err)
+		defaultEndpoint.AllowSOCKS5 = false
+		if err := endpointManager.ApplyEndpoint(defaultEndpoint); err != nil {
+			return fmt.Errorf("default endpoint listen: %w", err)
+		}
 	}
 	for _, endpoint := range customEndpoints {
 		if !endpoint.Enabled {
 			continue
 		}
-		if err := endpointManager.ApplyEndpoint(endpoint); err != nil {
+		effective, err := service.EndpointWithIPv6Configs(endpoint, configs)
+		if err == nil {
+			err = endpointManager.ApplyEndpoint(effective)
+		}
+		if err != nil {
 			endpointManager.RecordEndpointError(endpoint, err)
 			log.Printf("Endpoint %s on port %d unavailable: %v", endpoint.ID, endpoint.Port, err)
 		}

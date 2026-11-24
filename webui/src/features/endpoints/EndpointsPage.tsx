@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -22,13 +23,11 @@ import { useToast } from "../../hooks/useToast";
 import { useI18n } from "../../i18n";
 import { formatApiErrorMessage } from "../../lib/error-message";
 import { readPageSize, savePageSize } from "../../lib/page-size";
-import { createEndpoint, deleteEndpoint, listEndpoints, listIPv6Interfaces, updateEndpoint } from "./api";
-import type { Endpoint, EndpointInput, SOCKS5Account } from "./types";
+import { createEndpoint, deleteEndpoint, listEndpoints, updateEndpoint } from "./api";
+import type { Endpoint, EndpointInput } from "./types";
 
 type EndpointFormState = {
   port: string;
-  socks5_ipv6_interface: string;
-  socks5_accounts: SOCKS5Account[];
   enabled: boolean;
   allow_management: boolean;
   require_proxy_auth_info: boolean;
@@ -49,8 +48,6 @@ const REQUIRE_PROXY_AUTH_HINT = `一些应用（例如浏览器）只有在代�
 
 const DEFAULT_FORM: EndpointFormState = {
   port: "",
-  socks5_ipv6_interface: "",
-  socks5_accounts: [],
   enabled: true,
   allow_management: false,
   require_proxy_auth_info: false,
@@ -66,8 +63,6 @@ function endpointToForm(endpoint: Endpoint | null): EndpointFormState {
 
   return {
     port: String(endpoint.port),
-    socks5_ipv6_interface: endpoint.socks5_ipv6_interface,
-    socks5_accounts: endpoint.socks5_accounts,
     enabled: endpoint.enabled,
     allow_management: endpoint.allow_management,
     require_proxy_auth_info:
@@ -102,8 +97,6 @@ function parseEndpointForm(
 
   return {
     port,
-    socks5_ipv6_interface: form.allow_socks5 ? form.socks5_ipv6_interface.trim() : "",
-    socks5_accounts: form.allow_socks5 && form.socks5_ipv6_interface ? form.socks5_accounts : [],
     enabled: form.enabled,
     allow_management: form.allow_management,
     allow_proxy: allowProxy,
@@ -141,12 +134,6 @@ function EndpointForm({ endpoint, endpoints, pending, onClose, onSubmit }: Endpo
   const [formError, setFormError] = useState("");
   const isEditing = Boolean(endpoint);
   const readOnly = endpoint?.read_only ?? false;
-  const interfaces = useQuery({
-    queryKey: ["ipv6-interfaces"],
-    queryFn: listIPv6Interfaces,
-    enabled: form.allow_socks5 && !readOnly,
-  });
-  const selectedInterface = interfaces.data?.find((item) => item.name === form.socks5_ipv6_interface);
   const authPolicyAvailable = form.allow_http_forward || form.allow_socks5;
 
   useEffect(() => {
@@ -172,13 +159,6 @@ function EndpointForm({ endpoint, endpoints, pending, onClose, onSubmit }: Endpo
     });
     setFormError("");
   };
-
-  function updateAccount(index: number, key: keyof SOCKS5Account, value: string) {
-    setForm((current) => ({
-      ...current,
-      socks5_accounts: current.socks5_accounts.map((account, i) => i === index ? { ...account, [key]: value } : account),
-    }));
-  }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -315,65 +295,6 @@ function EndpointForm({ endpoint, endpoints, pending, onClose, onSubmit }: Endpo
         </div>
       </div>
 
-      {form.allow_socks5 && !readOnly && (
-        <>
-          <div className="field-group">
-            <label className="field-label" htmlFor="endpoint-ipv6-interface">{t("SOCKS5 出口网卡")}</label>
-            <select id="endpoint-ipv6-interface" className="input" value={form.socks5_ipv6_interface}
-              onChange={(event) => {
-                const name = event.target.value;
-                setForm((current) => ({
-                  ...current,
-                  socks5_ipv6_interface: name,
-                  socks5_accounts: current.socks5_accounts.length ? current.socks5_accounts : [{ username: "", address: "" }],
-                }));
-              }}>
-              <option value="">{t("使用节点池")}</option>
-              {form.socks5_ipv6_interface && !selectedInterface && (
-                <option value={form.socks5_ipv6_interface}>{form.socks5_ipv6_interface}</option>
-              )}
-              {interfaces.data?.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
-            </select>
-            {interfaces.isError && <span role="alert">{formatApiErrorMessage(interfaces.error, t)}</span>}
-            {selectedInterface && <span className="muted">{selectedInterface.prefixes.join(", ") || t("未发现公网 IPv6 前缀")}</span>}
-          </div>
-          {form.socks5_ipv6_interface && (
-            <div className="field-group field-span-2">
-              {form.socks5_accounts.map((account, i) => (
-                <div className="form-grid" key={i}>
-                  <label className="field-label">{t("SOCKS5 用户名")}
-                    <Input required maxLength={255} value={account.username} placeholder="claude001"
-                      onChange={(event) => updateAccount(i, "username", event.target.value)} />
-                  </label>
-                  <label className="field-label">{t("SOCKS5 密码")}
-                    <Input type="password" autoComplete="new-password" maxLength={255}
-                      required={!endpoint?.socks5_accounts.some((row) => row.username === account.username)}
-                      placeholder={endpoint?.socks5_accounts.some((row) => row.username === account.username) ? t("留空保留原密码") : undefined}
-                      value={account.password ?? ""} onChange={(event) => updateAccount(i, "password", event.target.value)} />
-                  </label>
-                  <label className="field-label">{t("固定出口 IPv6 地址（含 /64）")}
-                    <Input required value={account.address} placeholder="2001:db8:1234:5601::10/64"
-                      onChange={(event) => updateAccount(i, "address", event.target.value)} />
-                  </label>
-                  <Button type="button" variant="secondary" onClick={() => setForm({
-                    ...form,
-                    socks5_accounts: form.socks5_accounts.filter((_, index) => index !== i),
-                  })}>
-                    {t("移除账号")}
-                  </Button>
-                </div>
-              ))}
-              <Button type="button" variant="secondary" onClick={() => setForm({
-                ...form,
-                socks5_accounts: [...form.socks5_accounts, { username: "", address: "" }],
-              })}>
-                {t("添加账号映射")}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-
       {formError ? (
         <div className="callout callout-error field-span-2" role="alert">
           <AlertTriangle size={14} />
@@ -425,7 +346,10 @@ export function EndpointsPage() {
   const currentPage = Math.min(page, totalPages - 1);
 
   const invalidateEndpoints = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["endpoints"] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["endpoints"] }),
+      queryClient.invalidateQueries({ queryKey: ["ipv6-configs"] }),
+    ]);
   };
 
   const createMutation = useMutation({
@@ -559,6 +483,7 @@ export function EndpointsPage() {
         <div>
           <h2>{t("接入点")}</h2>
           <p className="module-description">{t("管理监听端口及其可用的接入能力。")}</p>
+          <Link to="/ipv6">{t("IPv6 管理")}</Link>
         </div>
       </header>
 

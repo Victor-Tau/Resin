@@ -13,20 +13,20 @@ func TestSubscriptionChainMigrationAndConstraints(t *testing.T) {
 	if err := repo.UpsertSubscription(sub); err != nil {
 		t.Fatal(err)
 	}
-	endpointDown, err := migrationsFS.ReadFile("migrations/state/000011_endpoint_ipv6.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.db.Exec(string(endpointDown)); err != nil {
-		t.Fatal(err)
-	}
 	// Recreate a real pre-feature version and upgrade its existing row.
-	down, err := migrationsFS.ReadFile("migrations/state/000010_subscription_chain_proxy.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.db.Exec(string(down)); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{
+		"000013_ipv6_prefixes.down.sql",
+		"000012_ipv6_config.down.sql",
+		"000011_endpoint_ipv6.down.sql",
+		"000010_subscription_chain_proxy.down.sql",
+	} {
+		down, err := migrationsFS.ReadFile(stateMigrationsPath + "/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.db.Exec(string(down)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, err := repo.db.Exec("UPDATE schema_migrations SET version = 9"); err != nil {
 		t.Fatal(err)

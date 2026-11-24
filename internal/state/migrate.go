@@ -30,7 +30,9 @@ const (
 	stateVersionPlatformRegexFilterRules         = 9
 	stateVersionSubscriptionChainProxy           = 10
 	stateVersionEndpointIPv6                     = 11
-	stateLatestVersion                           = stateVersionEndpointIPv6
+	stateVersionIPv6Config                       = 12
+	stateVersionIPv6Prefixes                     = 13
+	stateLatestVersion                           = stateVersionIPv6Prefixes
 	stateLegacyBaselineVersion                   = stateVersionAddFixedAccountHeader
 
 	stateBaseSchemaMigration = stateMigrationsPath + "/000001_state_base.up.sql"

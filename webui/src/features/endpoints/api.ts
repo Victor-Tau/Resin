@@ -53,6 +53,11 @@ export async function createEndpoint(input: EndpointInput): Promise<Endpoint> {
   return normalizeEndpoint(data);
 }
 
+export async function getEndpoint(id: string): Promise<Endpoint> {
+  const data = await apiRequest<Endpoint>(`${basePath}/${encodeURIComponent(id)}`);
+  return normalizeEndpoint(data);
+}
+
 export async function updateEndpoint(id: string, input: EndpointPatch): Promise<Endpoint> {
   const data = await apiRequest<Endpoint>(`${basePath}/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -65,8 +70,4 @@ export async function deleteEndpoint(id: string): Promise<void> {
   await apiRequest<void>(`${basePath}/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-}
-
-export function listIPv6Interfaces() {
-  return apiRequest<{ name: string; prefixes: string[] }[]>("/api/v1/system/ipv6-interfaces");
 }

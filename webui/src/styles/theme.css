@@ -3132,6 +3132,199 @@ a {
   }
 }
 
+.ipv6-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ipv6-flow li,
+.ipv6-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ipv6-flow p,
+.ipv6-empty p {
+  font-size: 13px;
+}
+
+.ipv6-icon-tile {
+  display: inline-grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #1759c7;
+  background: #eaf2ff;
+  border-radius: 9px;
+}
+
+.ipv6-flow-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.ipv6-section {
+  scroll-margin-top: 16px;
+}
+
+.ipv6-section-header {
+  flex-wrap: wrap;
+}
+
+.ipv6-section .callout {
+  margin-top: 10px;
+}
+
+.ipv6-empty {
+  margin-top: 12px;
+  border-style: dashed;
+}
+
+.ipv6-empty > svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ipv6-prefix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ipv6-prefix-card,
+.ipv6-prefix-editor {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.ipv6-prefix-editor {
+  background: #f6f9ff;
+  margin-top: 12px;
+}
+
+.ipv6-prefix-editor legend {
+  font-weight: 650;
+}
+
+.ipv6-prefix-card-heading,
+.ipv6-card-actions,
+.ipv6-port-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ipv6-prefix-card-heading h4 {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ipv6-prefix-address {
+  display: block;
+  margin: 10px 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.ipv6-card-actions {
+  margin-top: 10px;
+}
+
+.ipv6-form-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+
+.ipv6-form-heading + .muted {
+  margin-top: 5px;
+}
+
+.ipv6-regenerate {
+  align-self: flex-start;
+}
+
+.ipv6-fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.ipv6-bindings,
+.ipv6-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ipv6-bindings {
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.ipv6-bindings label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.ipv6-generate-address {
+  align-self: end;
+}
+
+.ipv6-batch-size {
+  max-width: 180px;
+}
+
+.ipv6-account-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.ipv6-password .input {
+  min-width: 0;
+}
+
+.data-table.ipv6-table {
+  min-width: 690px;
+}
+
+.ipv6-legacy {
+  display: block;
+}
+
+@media (max-width: 680px) {
+  .ipv6-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ipv6-flow-arrow {
+    transform: rotate(90deg);
+  }
+}
+
 .endpoint-toolbar-actions,
 .endpoint-tile-heading,
 .endpoint-tile-badges {

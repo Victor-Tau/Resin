@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/Resinat/Resin/internal/localipv6"
 	"github.com/Resinat/Resin/internal/model"
+	"github.com/Resinat/Resin/internal/service"
 	"github.com/Resinat/Resin/internal/state"
 )
 
@@ -39,7 +42,7 @@ func TestEndpointRuntimeManager_RemoveReleasesPortBeforeReturn(t *testing.T) {
 }
 
 func TestRestorePersistedEndpoints_SkipsDisabledListeners(t *testing.T) {
-	ports := reserveTestPorts(t, 2)
+	ports := reserveTestPorts(t, 3)
 	root := t.TempDir()
 	engine, closer, err := state.PersistenceBootstrap(filepath.Join(root, "state"), filepath.Join(root, "cache"))
 	if err != nil {
@@ -57,8 +60,19 @@ func TestRestorePersistedEndpoints_SkipsDisabledListeners(t *testing.T) {
 	}
 
 	manager := newEndpointRuntimeManager("127.0.0.1", "", nil, nil, nil, nil, nil, nil)
-	if err := restorePersistedEndpoints(engine, manager); err != nil {
+	account := model.IPv6Account{Address: netip.MustParsePrefix("2001:db8::5/64"), Interface: "test0"}
+	if err := engine.WriteIPv6Configs([]model.IPv6Config{{
+		ID: "persisted", Username: "alice", Account: account, EndpointIDs: []string{service.DefaultEndpointID},
+	}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	// Stub an already-acquired address so this test needs only loopback sockets.
+	manager.ipv6Addresses[localipv6.Mapping{Address: account.Address.Addr(), Interface: account.Interface}] = nil
+	if err := restorePersistedEndpoints(engine, manager, service.NewDefaultEndpoint(ports[2])); err != nil {
 		t.Fatalf("restorePersistedEndpoints: %v", err)
+	}
+	if restored := manager.runtimes[service.DefaultEndpointID].current().SOCKS5Accounts["alice"]; restored != account {
+		t.Fatalf("restored account = %+v, want %+v", restored, account)
 	}
 	if status := manager.EndpointStatus("enabled"); status.State != "starting" {
 		t.Fatalf("enabled endpoint status = %+v, want starting", status)

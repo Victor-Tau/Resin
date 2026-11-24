@@ -92,6 +92,14 @@ func NewServerWithAddress(
 		authed.Handle("GET /api/v1/endpoints/{id}", HandleGetEndpoint(cp))
 		authed.Handle("PATCH /api/v1/endpoints/{id}", HandleUpdateEndpoint(cp))
 		authed.Handle("DELETE /api/v1/endpoints/{id}", HandleDeleteEndpoint(cp))
+		authed.Handle("GET /api/v1/ipv6-configs", HandleListIPv6Configs(cp))
+		authed.Handle("POST /api/v1/ipv6-configs", HandleCreateIPv6Configs(cp))
+		authed.Handle("PUT /api/v1/ipv6-configs/{id}", HandleUpdateIPv6Config(cp))
+		authed.Handle("DELETE /api/v1/ipv6-configs/{id}", HandleDeleteIPv6Config(cp))
+		authed.Handle("GET /api/v1/ipv6-prefixes", HandleListIPv6Prefixes(cp))
+		authed.Handle("POST /api/v1/ipv6-prefixes", HandleSaveIPv6Prefix(cp, http.StatusCreated))
+		authed.Handle("PUT /api/v1/ipv6-prefixes/{id}", HandleSaveIPv6Prefix(cp, http.StatusOK))
+		authed.Handle("DELETE /api/v1/ipv6-prefixes/{id}", HandleDeleteIPv6Prefix(cp))
 
 		// Leases (under platforms).
 		authed.Handle("GET /api/v1/platforms/{id}/leases", HandleListLeases(cp))

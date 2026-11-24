@@ -31,11 +31,9 @@ export type EndpointInput = {
   allow_http_forward: boolean;
   allow_http_reverse: boolean;
   allow_socks5: boolean;
-  socks5_ipv6_interface: string;
-  socks5_accounts: SOCKS5Account[];
 };
 
-export type EndpointPatch = Partial<EndpointInput>;
+export type EndpointPatch = Partial<EndpointInput & Pick<Endpoint, "socks5_ipv6_interface" | "socks5_accounts">>;
 
 export type EndpointListResponse = {
   items: Endpoint[];

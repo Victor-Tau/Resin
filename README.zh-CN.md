@@ -114,9 +114,9 @@ services:
 Resin 所在的 Linux 服务器需要能通过 IPv6 访问目标，并持有运营商分配并路由到该服务器的前缀。只有 IPv4 的客户端可共用一个 SOCKS5 端口，把目标域名交给 Resin 解析。
 
 1. 在 **接入点** 创建自定义端口，例如 `2234`，开启 SOCKS5。只提供账号代理时，关闭该端口的 HTTP 正向、反向代理和管理页面。
-2. 选择 **SOCKS5 出口网卡**。页面列出该网卡可见的公网前缀。如果运营商单独路由了更大前缀，也可以按其分配记录手填其中的地址。
-3. 为每个用户名填写密码及完整的 IPv6 地址，末尾带 `/64`。例如从文档示例前缀 `2001:db8:1234:5600::/56` 分配 `claude001 → 2001:db8:1234:5601::10/64` 和 `claude002 → 2001:db8:1234:5602::20/64`。实际配置请换成自己的前缀。每个账号独占一个地址，也可以在同一 /64 中分配不同地址。编辑已有账号时密码留空可保留原密码。
-4. 保存后，Resin 在指定网卡添加各账号所需的 /128 地址，并等待内核完成重复地址检测。映射随数据库保存，重启时自动恢复。移除映射时会回收 Resin 本次运行创建且已无接入点使用的地址。
+2. 打开 **IPv6 管理 → 添加号段**。给号段填写标签，从服务器检测到的公网 `/64` 号段中选择，或手动填写运营商分配的号段和出口网卡。
+3. 点击 **创建 IPv6 代理** 后按标签选择号段，也可以在号段卡片上直接点击 **用此号段创建代理**。每批可添加 1 到 20 个账号，表单会自动生成 IPv6 地址和 8 位字母数字密码。填写用户名，勾选需要绑定的 SOCKS5 端口，再保存。编辑已有账号时密码留空可保留原密码。
+4. 绑定生效后，Resin 在指定网卡添加各账号所需的 /128 地址，并等待内核完成重复地址检测。配置和绑定随数据库保存，重启时自动恢复。解绑后，Resin 会回收本次运行创建且已无接入点使用的地址。
 
 在 IPv4 客户端上分别验证两个账号。以下示例中的 IPv4、用户名和密码应换成实际值。
 
@@ -127,28 +127,25 @@ curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude002:passwd2' https://
 
 两个响应中的 `ip=` 应分别等于所配地址。映射端口按原始 SOCKS5 用户名验证账号密码，目标需要有可达的 IPv6 地址。普通节点池使用原有身份和路由规则。
 
-账号较多时，可以向管理 API 的 `POST /api/v1/endpoints` 一次提交全部映射，认证使用管理员 Bearer token。示例请求体如下。
+也可以向管理 API 的 `POST /api/v1/ipv6-configs` 批量提交配置，认证使用管理员 Bearer token。通过 `GET /api/v1/endpoints` 获取接入点 ID，将下例中的 `<endpoint-id>` 替换为实际 ID。
 
 ```json
 {
-  "port": 2234,
-  "allow_socks5": true,
-  "allow_http_forward": false,
-  "allow_http_reverse": false,
-  "socks5_ipv6_interface": "eth0",
-  "socks5_accounts": [
-    {"username": "claude001", "password": "passwd1", "address": "2001:db8:1234:5601::10/64"},
-    {"username": "claude002", "password": "passwd2", "address": "2001:db8:1234:5602::20/64"}
+  "items": [
+    {"interface": "eth0", "username": "claude001", "password": "passwd1", "address": "2001:db8:1234:5601::10/64", "endpoint_ids": ["<endpoint-id>"]},
+    {"interface": "eth0", "username": "claude002", "password": "passwd2", "address": "2001:db8:1234:5601::20/64", "endpoint_ids": ["<endpoint-id>"]}
   ]
 }
 ```
 
-`PATCH /api/v1/endpoints/{id}` 支持替换整个 `socks5_accounts` 列表。批量编辑时应保留仍要使用的用户名，对已有用户名省略 `password` 即可沿用原密码。管理 API 响应只返回用户名和地址。
+通过 `POST /api/v1/ipv6-prefixes` 保存带标签的号段，请求字段为 `label`、`interface` 和 `prefix`。创建代理时可以用 `prefix_id` 指定保存的号段，Resin 会按号段选用出口网卡并验证地址所在范围。删除号段后，已有代理继续使用原地址。
+
+使用 `PUT /api/v1/ipv6-configs/{id}` 修改单条配置或接入点绑定。编辑时省略 `password` 即可沿用原密码。管理 API 响应会省略密码。
 
 **Docker 部署**。在单核服务器上，可以复用 GitHub Actions 发布的镜像。要让容器内的 Resin 用户自动添加 IPv6，用下面的 `Dockerfile.ipv6` 为已编译好的程序设置文件能力。
 
 ```dockerfile
-FROM ghcr.io/victor-tau/resin:1.5.0
+FROM ghcr.io/victor-tau/resin:1.6.0
 RUN apk add --no-cache libcap-setcap \
     && setcap cap_net_admin=ep /usr/local/bin/resin \
     && apk del libcap-setcap
@@ -343,11 +340,11 @@ curl "http://127.0.0.1:2260/my-token/MyPlatform/https/api.example.com/v1/orders"
 
 ## 通过 GitHub Actions 编译和发布
 
-本 fork 的正式版本由 GitHub 托管的 Ubuntu runner 编译。部署服务器只需下载对应架构的 Release 附件或拉取 GHCR 镜像。当前版本为 [v1.5.0](doc/release-notes/v1.5.0.md)。
+本 fork 的正式版本由 GitHub 托管的 Ubuntu runner 编译。部署服务器只需下载对应架构的 Release 附件或拉取 GHCR 镜像。当前版本为 [v1.6.0](doc/release-notes/v1.6.0.md)。
 
-1. 在 `webui/` 下运行 `npm version 1.5.0 --no-git-tag-version --ignore-scripts`，同步 `package.json` 和锁文件。下次发布时，请把命令中的版本号换成新版本。
-2. 在 `doc/release-notes/v1.5.0.md` 写入同版本的发布说明，更新 README 的版本链接，将改动提交到 `master`。
-3. 在该提交上执行 `git tag v1.5.0` 和 `git push --atomic origin master v1.5.0`。标签会触发 [Release 工作流](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml)。
+1. 在 `webui/` 下运行 `npm version 1.6.0 --no-git-tag-version --ignore-scripts`，同步 `package.json` 和锁文件。下次发布时，请把命令中的版本号换成新版本。
+2. 在 `doc/release-notes/v1.6.0.md` 写入同版本的发布说明，更新 README 的版本链接，将改动提交到 `master`。
+3. 在该提交上执行 `git tag v1.6.0` 和 `git push --atomic origin master v1.6.0`。标签会触发 [Release 工作流](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml)。
 4. 在 Actions 页面确认五个二进制构建、Release 附件发布和 Docker 镜像发布均成功。工作流把 Git 标签和提交号写入二进制，部署后可通过已认证的 `GET /api/v1/system/info` 核对。Linux 和 macOS 提供 amd64、arm64，Windows 提供 amd64。
 
 ## 其他部署方式

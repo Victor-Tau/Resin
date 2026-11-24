@@ -4,6 +4,7 @@ import { LoginPage } from "../features/auth/LoginPage";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { EndpointsPage } from "../features/endpoints/EndpointsPage";
 import { GeoIPPage } from "../features/geoip/GeoIPPage";
+import { IPv6Page } from "../features/ipv6/IPv6Page";
 import { NodesPage } from "../features/nodes/NodesPage";
 import { RequireAuth } from "../features/auth/RequireAuth";
 import { PlatformDetailPage } from "../features/platforms/PlatformDetailPage";
@@ -37,6 +38,7 @@ export function AppRoutes() {
         <Route path="/subscriptions" element={<SubscriptionPage />} />
         <Route path="/nodes" element={<NodesRoute />} />
         <Route path="/endpoints" element={<EndpointsPage />} />
+        <Route path="/ipv6" element={<IPv6Page />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/request-logs" element={<RequestLogsPage />} />
         <Route path="/resources" element={<GeoIPPage />} />
