@@ -163,6 +163,22 @@ func TestEndpointIPv6AccountsPersistWithoutExposingCredentials(t *testing.T) {
 	if !alice.Authenticate([]byte("secret-one")) || alice.Authenticate([]byte("secret-two")) || !bob.Authenticate([]byte("secret-two")) || alice.Address.String() != rows[0]["address"] {
 		t.Fatal("stored account mapping or password mismatch")
 	}
+	rec := doJSONRequest(t, srv, http.MethodGet, "/api/v1/endpoints", nil, true)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "password") {
+		t.Fatalf("standard endpoint list: %d %s", rec.Code, rec.Body.String())
+	}
+	const credentialPath = "/api/v1/endpoints?include_ipv6_passwords=true"
+	rec = doJSONRequest(t, srv, http.MethodGet, credentialPath, nil, true)
+	var listed PageResponse[service.EndpointResponse]
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil || rec.Code != http.StatusOK ||
+		len(listed.Items) != 2 || len(listed.Items[1].SOCKS5Accounts) != 2 ||
+		listed.Items[1].SOCKS5Accounts[0].Password != "secret-one" || listed.Items[1].SOCKS5Accounts[1].Password != "secret-two" ||
+		rec.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("opt-in endpoint list: %d %s, %v", rec.Code, rec.Body.String(), err)
+	}
+	if rec := doJSONRequest(t, srv, http.MethodGet, credentialPath, nil, false); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated password listing returned %d", rec.Code)
+	}
 	rows[1]["address"] = rows[0]["address"]
 	invalid := doJSONRequest(t, srv, http.MethodPatch, path, map[string]any{"socks5_accounts": rows}, true)
 	if invalid.Code != 400 {

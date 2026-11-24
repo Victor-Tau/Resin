@@ -13,7 +13,12 @@ func HandleListEndpoints(cp *service.ControlPlaneService) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		endpoints, err := cp.ListEndpoints()
+		list := cp.ListEndpoints
+		if r.URL.Query().Get("include_ipv6_passwords") == "true" {
+			w.Header().Set("Cache-Control", "no-store")
+			list = cp.ListEndpointsWithIPv6Passwords
+		}
+		endpoints, err := list()
 		if err != nil {
 			writeServiceError(w, err)
 			return

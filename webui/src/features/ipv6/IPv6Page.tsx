@@ -63,8 +63,8 @@ export function IPv6Page() {
   const [credentials, setCredentials] = useState<IPv6Config[]>([]);
   const [copyRequest, setCopyRequest] = useState<IPv6Config[]>();
   const [adminToken] = useState(getStoredAuthToken);
-  const configsQuery = useQuery({ queryKey: ["ipv6-configs"], queryFn: listIPv6Configs });
-  const endpointsQuery = useQuery({ queryKey: ["endpoints", "ipv6"], queryFn: listIPv6Endpoints });
+  const configsQuery = useQuery({ queryKey: ["ipv6-configs"], queryFn: listIPv6Configs, gcTime: 0 });
+  const endpointsQuery = useQuery({ queryKey: ["endpoints", "ipv6"], queryFn: listIPv6Endpoints, gcTime: 0 });
   const interfacesQuery = useQuery({ queryKey: ["ipv6-interfaces"], queryFn: listIPv6Interfaces });
   const prefixesQuery = useQuery({ queryKey: ["ipv6-prefixes"], queryFn: listIPv6Prefixes });
   const endpoints = endpointsQuery.data ?? [];
@@ -77,6 +77,7 @@ export function IPv6Page() {
         config: {
           id: `legacy:${endpoint.id}:${account.username}`,
           username: account.username,
+          password: account.password,
           address: account.address,
           interface: endpoint.socks5_ipv6_interface,
           endpoint_ids: [endpoint.id],
@@ -100,32 +101,37 @@ export function IPv6Page() {
   }
 
   const save = useMutation({
+    gcTime: 0,
     mutationFn: async ({ entry, items }: { entry: Entry | null; items: IPv6ConfigInput[] }): Promise<IPv6Config[]> => {
       if (entry?.legacyEndpointID) {
         const { username, password, address } = items[0];
         await changeLegacyAccounts(entry.legacyEndpointID, [entry.config.username], { username, password, address });
-        return [{ ...entry.config, id: `legacy:${entry.legacyEndpointID}:${username}`, username, address }];
+        return [{
+          ...entry.config,
+          id: `legacy:${entry.legacyEndpointID}:${username}`,
+          username,
+          password: password || entry.config.password,
+          address,
+        }];
       }
       return entry ? [await updateIPv6Config(entry.config.id, items[0])] : createIPv6Configs(items);
     },
-    onSuccess: async (saved, { entry, items }) => {
+    onSuccess: async (saved, { entry }) => {
       const next = new Map(passwords);
       const previousID = entry?.config.id;
-      const previousPassword = previousID ? next.get(previousID) : undefined;
       if (previousID && previousID !== saved[0].id) {
         next.delete(previousID);
         if (selectedIDs.has(previousID)) {
           setSelectedIDs(new Set([...selectedIDs].filter((id) => id !== previousID).concat(saved[0].id)));
         }
       }
-      saved.forEach(({ id }, index) => {
-        const password = items[index].password || previousPassword;
+      saved.forEach(({ id, password }) => {
         if (password) {
-          next.set(id, password);
+          next.delete(id);
         }
       });
       rememberPasswords(next);
-      setCredentials(saved.filter(({ id }) => next.has(id)));
+      setCredentials(saved.filter(({ id, password }) => password || next.has(id)));
       setEditor(undefined);
       await invalidate();
       showToast("success", t("IPv6 配置已保存"));
@@ -194,9 +200,11 @@ export function IPv6Page() {
   const proxyFormUnavailable = pending || endpointsQuery.isPending || prefixesQuery.isPending;
   const selectedEntries = entries.filter(({ config }) => selectedIDs.has(config.id));
   const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
-  const missingPasswords = copyRequest?.filter((config) => socks5Ports(config, endpoints).length && !passwords.has(config.id)) ?? [];
+  const missingPasswords = copyRequest?.filter(
+    (config) => socks5Ports(config, endpoints).length && !config.password && !passwords.has(config.id),
+  ) ?? [];
   const savedLinks = credentials.flatMap((config) => {
-    const password = passwords.get(config.id);
+    const password = config.password || passwords.get(config.id);
     return password ? socks5Links(config, password, socks5Ports(config, endpoints)) : [];
   }).join("\n");
   const savedWithoutPorts = credentials.filter((config) => !socks5Ports(config, endpoints).length).length;
@@ -227,11 +235,11 @@ export function IPv6Page() {
     }
     const known = new Map(passwords);
     supplied?.forEach((password, id) => known.set(id, password));
-    if (bound.some(({ config }) => !known.has(config.id))) {
+    if (bound.some(({ config }) => !config.password && !known.has(config.id))) {
       setCopyRequest(configs);
       return false;
     }
-    const links = bound.flatMap(({ config, ports }) => socks5Links(config, known.get(config.id) ?? "", ports));
+    const links = bound.flatMap(({ config, ports }) => socks5Links(config, config.password || known.get(config.id) || "", ports));
     const skipped = configs.length - bound.length;
     const copied = await copy(links.join("\n"), skipped
       ? t("已复制 {{count}} 条链接，{{skipped}} 个代理没有可用的 SOCKS5 端口。", { count: links.length, skipped })
@@ -410,6 +418,7 @@ export function IPv6Page() {
               <tbody>
                 {entries.map((entry) => {
                   const { config } = entry;
+                  const address = config.address.split("/", 1)[0];
                   const ports = config.endpoint_ids.flatMap((id) => {
                     const port = portByID.get(id);
                     return port === undefined ? [] : [port];
@@ -427,9 +436,9 @@ export function IPv6Page() {
                       </td>
                       <td>
                         <div className="ipv6-address-cell">
-                          <code>{config.address}</code>
+                          <code>{address}</code>
                           <Button variant="ghost" size="sm" aria-label={t("复制 IPv6 地址")} title={t("复制 IPv6 地址")}
-                            onClick={() => void copy(config.address.split("/", 1)[0])}>
+                            onClick={() => void copy(address)}>
                             <Copy size={14} aria-hidden="true" />
                           </Button>
                         </div>

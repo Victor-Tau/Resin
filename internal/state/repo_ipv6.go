@@ -11,7 +11,7 @@ import (
 
 func (r *StateRepo) ListIPv6Configs() ([]model.IPv6Config, error) {
 	rows, err := r.db.Query(`
-		SELECT id, COALESCE(prefix_id, ''), interface, username, address, password_hash, endpoint_ids_json
+		SELECT id, COALESCE(prefix_id, ''), interface, username, address, password, password_hash, endpoint_ids_json
 		FROM ipv6_configs ORDER BY username, id
 	`)
 	if err != nil {
@@ -24,7 +24,7 @@ func (r *StateRepo) ListIPv6Configs() ([]model.IPv6Config, error) {
 		var config model.IPv6Config
 		var address, bindings string
 		if err := rows.Scan(&config.ID, &config.PrefixID, &config.Account.Interface, &config.Username, &address,
-			&config.Account.PasswordHash, &bindings); err != nil {
+			&config.Account.Password, &config.Account.PasswordHash, &bindings); err != nil {
 			return nil, err
 		}
 		config.Account.Address, err = netip.ParsePrefix(address)
@@ -56,13 +56,13 @@ func (r *StateRepo) WriteIPv6Configs(configs []model.IPv6Config, deleteID string
 			return err
 		}
 		_, err = tx.Exec(`
-			INSERT INTO ipv6_configs (id, prefix_id, interface, username, address, password_hash, endpoint_ids_json)
-			VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?)
+			INSERT INTO ipv6_configs (id, prefix_id, interface, username, address, password, password_hash, endpoint_ids_json)
+			VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				prefix_id = excluded.prefix_id, interface = excluded.interface, username = excluded.username, address = excluded.address,
-				password_hash = excluded.password_hash, endpoint_ids_json = excluded.endpoint_ids_json
+				password = excluded.password, password_hash = excluded.password_hash, endpoint_ids_json = excluded.endpoint_ids_json
 		`, config.ID, config.PrefixID, config.Account.Interface, config.Username, config.Account.Address.String(),
-			config.Account.PasswordHash, string(bindings))
+			config.Account.Password, config.Account.PasswordHash, string(bindings))
 		if err != nil {
 			return err
 		}

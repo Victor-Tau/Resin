@@ -34,7 +34,7 @@ export function IPv6CopyDialog({ missing, onClose, onCopy }: Props) {
   return (
     <IPv6Dialog title={t("输入 SOCKS5 密码")} onClose={onClose}>
       <form className="ipv6-copy-form" onSubmit={submit}>
-        <p className="muted">{t("服务器只保存密码哈希。请输入现有密码，复制后会在此标签页的会话中保留。")}</p>
+        <p className="muted">{t("以下旧账号未保存可复制的密码。可以输入原密码复制，或在编辑代理时填写密码并保存，之后就能直接复制。")}</p>
         {copyFailed && <p className="callout callout-error" role="alert">{t("无法访问剪贴板，请重试。")}</p>}
         <fieldset className="ipv6-fieldset" disabled={copying}>
           {missing.map(({ id, username }) => (

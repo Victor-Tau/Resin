@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 )
 
 type Mapping struct {
@@ -24,6 +25,19 @@ func ParseMapping(iface, cidr string) (Mapping, error) {
 		return Mapping{}, fmt.Errorf("select an interface and a public IPv6 address with /64")
 	}
 	return Mapping{Interface: iface, Address: prefix.Addr()}, nil
+}
+
+// ParseProxyMapping accepts a host address and the legacy /64 notation.
+func ParseProxyMapping(iface, address string) (Mapping, error) {
+	address = strings.TrimSpace(address)
+	if !strings.Contains(address, "/") {
+		address += "/64"
+	}
+	mapping, err := ParseMapping(iface, address)
+	if err != nil {
+		return Mapping{}, fmt.Errorf("select an interface and a public IPv6 address")
+	}
+	return mapping, nil
 }
 
 type Interface struct {

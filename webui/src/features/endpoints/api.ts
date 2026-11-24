@@ -28,6 +28,7 @@ function normalizeEndpoint(raw: Endpoint): Endpoint {
 export type ListEndpointsInput = {
   limit?: number;
   offset?: number;
+  includeIPv6Passwords?: boolean;
 };
 
 export async function listEndpoints(input: ListEndpointsInput = {}): Promise<EndpointListResponse> {
@@ -35,6 +36,9 @@ export async function listEndpoints(input: ListEndpointsInput = {}): Promise<End
     limit: String(input.limit ?? 20),
     offset: String(input.offset ?? 0),
   });
+  if (input.includeIPv6Passwords) {
+    query.set("include_ipv6_passwords", "true");
+  }
   const data = await apiRequest<EndpointListResponse>(`${basePath}?${query.toString()}`);
   const items = Array.isArray(data.items) ? data.items.map(normalizeEndpoint) : [];
   return {

@@ -55,7 +55,7 @@ func TestIPv6PrefixManagementAndProxySelection(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("out-of-range proxy status %d: %s", rec.Code, rec.Body.String())
 	}
-	proxy.Address = "2001:db8:1234:5601::10/64"
+	proxy.Address = "2001:db8:1234:5601::10"
 	rec = doJSONRequest(t, srv, http.MethodPost, proxyPath, map[string]any{"items": []service.IPv6ConfigInput{proxy}}, true)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create proxy status %d: %s", rec.Code, rec.Body.String())
@@ -89,7 +89,7 @@ func TestIPv6PrefixManagementAndProxySelection(t *testing.T) {
 		t.Fatalf("delete prefix status %d: %s", rec.Code, rec.Body.String())
 	}
 	configs, err := cp.Engine.ListIPv6Configs()
-	if err != nil || len(configs) != 1 || configs[0].PrefixID != "" || configs[0].Account.Address.String() != proxy.Address ||
+	if err != nil || len(configs) != 1 || configs[0].PrefixID != "" || configs[0].Account.Address.Addr().String() != proxy.Address ||
 		configs[0].Account.Interface != "eth0" || !configs[0].Account.Authenticate([]byte(proxy.Password)) {
 		t.Fatalf("proxy should keep its address, interface and credentials: %v", err)
 	}

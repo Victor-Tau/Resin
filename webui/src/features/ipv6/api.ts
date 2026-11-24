@@ -3,7 +3,7 @@ import { listEndpoints } from "../endpoints/api";
 import type { Endpoint, SOCKS5Account } from "../endpoints/types";
 
 export type IPv6ConfigInput = SOCKS5Account & { interface: string; endpoint_ids: string[]; prefix_id?: string };
-export type IPv6Config = Omit<IPv6ConfigInput, "password"> & { id: string };
+export type IPv6Config = IPv6ConfigInput & { id: string };
 export type IPv6Candidate = { prefix: string; parent: string };
 export type IPv6Interface = { name: string; prefixes: string[]; candidates?: IPv6Candidate[] };
 export type IPv6PrefixInput = { label: string; interface: string; prefix: string };
@@ -44,7 +44,7 @@ export function listIPv6Interfaces() {
 export async function listIPv6Endpoints() {
   const endpoints: Endpoint[] = [];
   for (let offset = 0; ; offset = endpoints.length) {
-    const page = await listEndpoints({ limit: 100, offset });
+    const page = await listEndpoints({ limit: 100, offset, includeIPv6Passwords: true });
     endpoints.push(...page.items);
     if (endpoints.length >= page.total || page.items.length === 0) {
       return endpoints;

@@ -32,7 +32,8 @@ const (
 	stateVersionEndpointIPv6                     = 11
 	stateVersionIPv6Config                       = 12
 	stateVersionIPv6Prefixes                     = 13
-	stateLatestVersion                           = stateVersionIPv6Prefixes
+	stateVersionIPv6Password                     = 14
+	stateLatestVersion                           = stateVersionIPv6Password
 	stateLegacyBaselineVersion                   = stateVersionAddFixedAccountHeader
 
 	stateBaseSchemaMigration = stateMigrationsPath + "/000001_state_base.up.sql"

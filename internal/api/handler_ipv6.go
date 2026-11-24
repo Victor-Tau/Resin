@@ -8,6 +8,7 @@ import (
 
 func HandleListIPv6Configs(cp *service.ControlPlaneService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		configs, err := cp.ListIPv6Configs()
 		if err != nil {
 			writeServiceError(w, err)
@@ -19,6 +20,7 @@ func HandleListIPv6Configs(cp *service.ControlPlaneService) http.HandlerFunc {
 
 func HandleCreateIPv6Configs(cp *service.ControlPlaneService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		var input struct {
 			Items []service.IPv6ConfigInput `json:"items"`
 		}
@@ -37,6 +39,7 @@ func HandleCreateIPv6Configs(cp *service.ControlPlaneService) http.HandlerFunc {
 
 func HandleUpdateIPv6Config(cp *service.ControlPlaneService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		var input service.IPv6ConfigInput
 		if err := DecodeBody(r, &input); err != nil {
 			writeDecodeBodyError(w, err)

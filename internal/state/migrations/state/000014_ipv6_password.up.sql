@@ -1,0 +1,1 @@
+ALTER TABLE ipv6_configs ADD COLUMN password TEXT NOT NULL DEFAULT '';

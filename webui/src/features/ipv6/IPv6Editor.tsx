@@ -32,7 +32,7 @@ export function IPv6Editor({ initial, legacy, prefixes, defaultPrefix, endpoints
   const [bindings, setBindings] = useState(initial?.endpoint_ids ?? []);
   const [accounts, setAccounts] = useState<SOCKS5Account[]>(() => {
     if (initial) {
-      return [{ username: initial.username, address: initial.address }];
+      return [{ username: initial.username, address: initial.address.split("/", 1)[0] }];
     }
     const network = defaultPrefix && ipv6Network(defaultPrefix.prefix);
     return [{ username: "", address: network ? generateAddress(network, new Set()) : "", password: generatePassword() }];
@@ -240,10 +240,10 @@ export function IPv6Editor({ initial, legacy, prefixes, defaultPrefix, endpoints
                     </div>
                   </div>
                   <label className="field-group field-label">
-                    {t("固定出口 IPv6 地址（含 /64）")}
+                    {t("固定出口 IPv6 地址")}
                     <Input
                       required
-                      placeholder="2001:db8:1234:5601::10/64"
+                      placeholder="2001:db8:1234:5601::10"
                       value={account.address}
                       onChange={(event) => setAccount(index, { address: event.target.value })}
                     />

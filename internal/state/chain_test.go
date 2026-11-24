@@ -15,6 +15,7 @@ func TestSubscriptionChainMigrationAndConstraints(t *testing.T) {
 	}
 	// Recreate a real pre-feature version and upgrade its existing row.
 	for _, name := range []string{
+		"000014_ipv6_password.down.sql",
 		"000013_ipv6_prefixes.down.sql",
 		"000012_ipv6_config.down.sql",
 		"000011_endpoint_ipv6.down.sql",

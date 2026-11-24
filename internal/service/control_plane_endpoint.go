@@ -182,6 +182,14 @@ func (s *ControlPlaneService) validateEndpoint(endpoint model.Endpoint) *Service
 }
 
 func (s *ControlPlaneService) ListEndpoints() ([]EndpointResponse, error) {
+	return s.listEndpoints(false)
+}
+
+func (s *ControlPlaneService) ListEndpointsWithIPv6Passwords() ([]EndpointResponse, error) {
+	return s.listEndpoints(true)
+}
+
+func (s *ControlPlaneService) listEndpoints(includeIPv6Passwords bool) ([]EndpointResponse, error) {
 	if s == nil || s.Engine == nil {
 		return nil, internal("endpoint service is not initialized", nil)
 	}
@@ -195,7 +203,13 @@ func (s *ControlPlaneService) ListEndpoints() ([]EndpointResponse, error) {
 	result := make([]EndpointResponse, 0, len(custom)+1)
 	result = append(result, s.endpointResponse(s.defaultEndpoint(), "environment", true))
 	for _, endpoint := range custom {
-		result = append(result, s.endpointResponse(endpoint, "database", false))
+		response := s.endpointResponse(endpoint, "database", false)
+		if includeIPv6Passwords {
+			for i, account := range response.SOCKS5Accounts {
+				response.SOCKS5Accounts[i].Password = endpoint.SOCKS5Accounts[account.Username].Password
+			}
+		}
+		result = append(result, response)
 	}
 	return result, nil
 }
@@ -410,7 +424,7 @@ func setSOCKS5Accounts(endpoint *model.Endpoint, input []SOCKS5Account) *Service
 		if len(row.Username) == 0 || len(row.Username) > 255 {
 			return invalidArg("SOCKS5 username must be 1–255 bytes")
 		}
-		mapping, err := localipv6.ParseMapping(endpoint.SOCKS5IPv6Interface, row.Address)
+		mapping, err := localipv6.ParseProxyMapping(endpoint.SOCKS5IPv6Interface, row.Address)
 		if err != nil {
 			return invalidArg(err.Error())
 		}

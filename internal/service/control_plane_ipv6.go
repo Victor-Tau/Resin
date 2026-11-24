@@ -38,6 +38,7 @@ func ipv6ConfigResponse(config model.IPv6Config) IPv6ConfigResponse {
 			SOCKS5Account: SOCKS5Account{
 				Username: config.Username,
 				Address:  config.Account.Address.String(),
+				Password: config.Account.Password,
 			},
 		},
 	}
@@ -125,9 +126,9 @@ func (s *ControlPlaneService) changeIPv6Configs(id string, inputs []IPv6ConfigIn
 	responses := make([]IPv6ConfigResponse, 0, len(inputs))
 	prefixes := make(map[string]model.IPv6Prefix)
 	for _, input := range inputs {
+		prefix := prefixes[input.PrefixID]
 		if input.PrefixID != "" {
-			prefix, exists := prefixes[input.PrefixID]
-			if !exists {
+			if prefix.ID == "" {
 				prefix, err = s.Engine.GetIPv6Prefix(input.PrefixID)
 				if errors.Is(err, state.ErrNotFound) {
 					return nil, invalidArg("selected IPv6 prefix no longer exists")
@@ -137,15 +138,14 @@ func (s *ControlPlaneService) changeIPv6Configs(id string, inputs []IPv6ConfigIn
 				}
 				prefixes[input.PrefixID] = prefix
 			}
-			address, err := netip.ParsePrefix(strings.TrimSpace(input.Address))
-			if err != nil || address.Bits() != 64 || !prefix.Prefix.Contains(address.Addr()) {
-				return nil, invalidArg("proxy address must belong to the selected IPv6 prefix")
-			}
 			input.Interface = prefix.Interface
 		}
 		config, problem := parseIPv6Config(input, previous)
 		if problem != nil {
 			return nil, problem
+		}
+		if prefix.ID != "" && !prefix.Prefix.Contains(config.Account.Address.Addr()) {
+			return nil, invalidArg("proxy address must belong to the selected IPv6 prefix")
 		}
 		if usedAddresses[config.Account.Address.Addr()] {
 			return nil, conflict(fmt.Sprintf("IPv6 address %s is already configured", config.Account.Address.Addr()))
@@ -221,7 +221,7 @@ func parseIPv6Config(input IPv6ConfigInput, previous model.IPv6Config) (model.IP
 		return model.IPv6Config{}, invalidArg("SOCKS5 username must be 1–255 bytes")
 	}
 	input.Interface = strings.TrimSpace(input.Interface)
-	mapping, err := localipv6.ParseMapping(input.Interface, strings.TrimSpace(input.Address))
+	mapping, err := localipv6.ParseProxyMapping(input.Interface, input.Address)
 	if err != nil {
 		return model.IPv6Config{}, invalidArg(err.Error())
 	}

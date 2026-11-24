@@ -51,7 +51,7 @@ export function generateAddress(network: string, used: Set<string>) {
     if (values.every((value) => value === 0)) {
       continue;
     }
-    const address = `${network}:${Array.from(values, (value) => value.toString(16)).join(":")}/64`;
+    const address = `${network}:${Array.from(values, (value) => value.toString(16)).join(":")}`;
     if (!used.has(address)) {
       used.add(address);
       return address;

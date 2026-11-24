@@ -606,7 +606,7 @@ Note: Once enabled, requests without authentication information are rejected ins
   "SOCKS5 出口网卡": "SOCKS5 egress interface",
   "使用节点池": "Use node pool",
   "未发现公网 IPv6 前缀": "No public IPv6 prefix detected",
-  "固定出口 IPv6 地址（含 /64）": "Fixed IPv6 source address (with /64)",
+  "固定出口 IPv6 地址": "Fixed IPv6 source address",
   "IPv6 管理": "IPv6 Management",
   "IPv6 代理": "IPv6 Proxies",
   "IPv6 代理配置流程": "IPv6 proxy setup",
@@ -718,8 +718,8 @@ Note: Once enabled, requests without authentication information are rejected ins
   "复制代理链接": "Copy Proxy Links",
   "输入 SOCKS5 密码": "Enter SOCKS5 Passwords",
   "{{username}} 的 SOCKS5 密码": "SOCKS5 password for {{username}}",
-  "服务器只保存密码哈希。请输入现有密码，复制后会在此标签页的会话中保留。":
-    "The server stores password hashes. Enter the existing passwords to keep them for the rest of this tab's session.",
+  "以下旧账号未保存可复制的密码。可以输入原密码复制，或在编辑代理时填写密码并保存，之后就能直接复制。":
+    "These older accounts have no saved passwords to copy. Enter the existing passwords to copy now, or save a password in Edit Proxy to copy directly next time.",
   "请先绑定已启用的 SOCKS5 端口。": "Bind an enabled SOCKS5 port first.",
   "{{count}} 个代理尚无可用的 SOCKS5 端口。": "{{count}} proxies have no available SOCKS5 port.",
   "已复制 {{count}} 条 SOCKS5 链接": "Copied {{count}} SOCKS5 links",
@@ -918,5 +918,6 @@ export function buildZhTranslations(): Record<string, string> {
     "IPv6 prefix not found": "找不到该号段",
     "another IPv6 prefix check is running": "另一项号段验证正在进行，请稍后重试",
     "select an interface and a public IPv6 address with /64": "请选择出口网卡并填写公网 IPv6 /64 地址",
+    "select an interface and a public IPv6 address": "请选择出口网卡并填写公网 IPv6 地址",
   };
 }
