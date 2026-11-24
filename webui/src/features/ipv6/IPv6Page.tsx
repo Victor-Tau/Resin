@@ -281,7 +281,7 @@ export function IPv6Page() {
       <header className="module-header">
         <div>
           <h2>{t("IPv6 管理")}</h2>
-          <p className="module-description">{t("为 SOCKS5 代理分配固定的 IPv6 出口地址。")}</p>
+          <p className="module-description">{t("为代理账号分配固定的 IPv6 出口地址。")}</p>
         </div>
         <Button onClick={() => openEditor(null)} disabled={proxyFormUnavailable}>
           <Plus size={16} />

@@ -612,7 +612,7 @@ Note: Once enabled, requests without authentication information are rejected ins
   "IPv6 代理配置流程": "IPv6 proxy setup",
   "加载中...": "Loading...",
   "{{count}} 个代理": "{{count}} proxies",
-  "为 SOCKS5 代理分配固定的 IPv6 出口地址。": "Assign fixed IPv6 egress addresses to SOCKS5 proxies.",
+  "为代理账号分配固定的 IPv6 出口地址。": "Assign fixed IPv6 egress addresses to proxy accounts.",
   "代理账号": "Proxy account",
   "例如：proxy01": "Example: proxy01",
   "例如：家用网络": "Example: Home network",
@@ -663,8 +663,8 @@ Note: Once enabled, requests without authentication information are rejected ins
     "Use Add Address Range to choose a range detected on this server.",
   "用此号段创建代理": "Create Proxy from This Range",
   "用账号和密码登录": "Sign in with a username and password",
-  "绑定后，这些端口的 SOCKS5 客户端需要使用 IPv6 代理的账号和密码。":
-    "Once bound, SOCKS5 clients connecting to these ports need IPv6 proxy credentials.",
+  "SOCKS5 使用绑定账号和密码。接入点开启 HTTP 正向代理时，也可以用同一账号通过 HTTP 连接。":
+    "Use the bound credentials for SOCKS5. The same credentials work over HTTP when HTTP forward proxying is enabled on the endpoint.",
   "编辑代理": "Edit Proxy",
   "编辑号段": "Edit Address Range",
   "编辑号段 {{label}}": "Edit prefix {{label}}",

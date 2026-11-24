@@ -1,9 +1,14 @@
 package main
 
 import (
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/Resinat/Resin/internal/model"
 	"github.com/Resinat/Resin/internal/proxy"
@@ -335,5 +340,89 @@ func TestEndpointInboundMux_InjectsProxyAuthInfoPolicy(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 	if rec.Code != http.StatusNoContent || !seenRequired {
 		t.Fatalf("status/required = %d/%v, want 204/true", rec.Code, seenRequired)
+	}
+}
+
+func TestEndpointInboundMux_HTTPForwardWithIPv6Account(t *testing.T) {
+	upstreamHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Proxy-Authorization") != "" {
+			t.Error("proxy credentials reached the origin")
+		}
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			t.Errorf("read remote address: %v", err)
+		}
+		_, _ = io.WriteString(w, host)
+	})
+	newUpstream := func(tls bool) *httptest.Server {
+		t.Helper()
+		listener, err := net.Listen("tcp6", "[::1]:0")
+		if err != nil {
+			t.Skipf("IPv6 loopback unavailable: %v", err)
+		}
+		server := httptest.NewUnstartedServer(upstreamHandler)
+		server.Listener.Close()
+		server.Listener = listener
+		if tls {
+			server.StartTLS()
+		} else {
+			server.Start()
+		}
+		t.Cleanup(server.Close)
+		return server
+	}
+	httpOrigin := newUpstream(false)
+	httpsOrigin := newUpstream(true)
+	ipv4Origin := httptest.NewServer(upstreamHandler)
+	defer ipv4Origin.Close()
+
+	const username = "fixed.alice"
+	const password = "test:password"
+	const token = "global-token"
+	account := model.IPv6Account{Address: netip.MustParsePrefix("::1/128")}
+	if err := account.SetPassword(password); err != nil {
+		t.Fatal(err)
+	}
+	endpoint := service.NewDefaultEndpoint(0)
+	endpoint.SOCKS5Accounts = map[string]model.IPv6Account{username: account}
+	forward := proxy.NewForwardProxy(proxy.ForwardProxyConfig{
+		ProxyToken: token, ProxyBypassRules: []string{"127.0.0.1"},
+	})
+	server := httptest.NewServer(newEndpointInboundMux(func() model.Endpoint { return endpoint }, token, forward, nil, nil, nil))
+	defer server.Close()
+
+	for _, tt := range []struct {
+		name, target, password, source string
+		status                         int
+	}{
+		{name: "HTTP", target: httpOrigin.URL, password: password, source: "::1", status: http.StatusOK},
+		{name: "CONNECT", target: httpsOrigin.URL, password: password, source: "::1", status: http.StatusOK},
+		{name: "IPv4 target", target: ipv4Origin.URL, password: password, status: http.StatusBadGateway},
+		{name: "wrong password", target: httpOrigin.URL, password: "wrong", status: http.StatusForbidden},
+		{name: "global token", target: ipv4Origin.URL, password: token, source: "127.0.0.1", status: http.StatusOK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			proxyURL, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proxyURL.User = url.UserPassword(username, tt.password)
+			transport := httpsOrigin.Client().Transport.(*http.Transport).Clone()
+			defer transport.CloseIdleConnections()
+			transport.Proxy = http.ProxyURL(proxyURL)
+			client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+			resp, err := client.Get(tt.target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != tt.status || (tt.source != "" && string(body) != tt.source) {
+				t.Fatalf("status %d, body %q, want status %d and source %q", resp.StatusCode, body, tt.status, tt.source)
+			}
+		})
 	}
 }

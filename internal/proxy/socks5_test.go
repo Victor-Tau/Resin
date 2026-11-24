@@ -1005,7 +1005,7 @@ func TestSocks5MappedAccountUsesIPv6Source(t *testing.T) {
 	if err := account.SetPassword("alice-password"); err != nil {
 		t.Fatal(err)
 	}
-	policy := InboundPolicy{SOCKS5Accounts: map[string]model.IPv6Account{"alice": account}}
+	policy := InboundPolicy{IPv6Accounts: map[string]model.IPv6Account{"alice": account}}
 	s := NewSocks5Inbound(Socks5InboundConfig{ProxyToken: "global"})
 	ctx := ContextWithInboundPolicy(context.Background(), policy)
 	for _, tc := range []struct {

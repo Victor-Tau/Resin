@@ -39,6 +39,7 @@ func newEndpointInboundMux(
 			}
 			r = r.WithContext(proxy.ContextWithInboundPolicy(r.Context(), proxy.InboundPolicy{
 				RequireProxyAuthInfo: endpoint.RequireProxyAuthInfo,
+				IPv6Accounts:         endpoint.SOCKS5Accounts,
 			}))
 			forward.ServeHTTP(w, r)
 			return

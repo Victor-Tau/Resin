@@ -129,7 +129,13 @@ curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude001:passwd1' https://
 curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude002:passwd2' https://cloudflare.com/cdn-cgi/trace
 ```
 
-两个响应中的 `ip=` 应分别等于所配地址。映射端口按原始 SOCKS5 用户名验证账号密码，目标需要有可达的 IPv6 地址。普通节点池使用原有身份和路由规则。
+两个响应中的 `ip=` 应分别等于所配地址。映射端口按原始用户名验证账号密码，目标需要有可达的 IPv6 地址。普通节点池使用原有身份和路由规则。
+
+如果绑定的接入点也开启了 **HTTP 正向代理**，可以用相同的账号和密码通过 `http://` 连接。访问 HTTPS 目标时，HTTP CONNECT 也会使用该账号绑定的 IPv6 出口。
+
+```bash
+curl --proxy http://192.0.2.10:2234 --proxy-user 'claude001:passwd1' https://cloudflare.com/cdn-cgi/trace
+```
 
 也可以向管理 API 的 `POST /api/v1/ipv6-configs` 批量提交配置，认证使用管理员 Bearer token。通过 `GET /api/v1/endpoints` 获取接入点 ID，将下例中的 `<endpoint-id>` 替换为实际 ID。
 

@@ -101,8 +101,8 @@ func (s *Socks5Inbound) ServeConnContext(baseCtx context.Context, conn net.Conn)
 	defer handshakePhase.Stop()
 
 	policy := InboundPolicyFromContext(baseCtx)
-	requireAuthInfo := policy.RequireProxyAuthInfo && s.token == "" || len(policy.SOCKS5Accounts) > 0
-	handshake := s.performHandshake(conn, reader, requireAuthInfo, policy.SOCKS5Accounts)
+	requireAuthInfo := policy.RequireProxyAuthInfo && s.token == "" || len(policy.IPv6Accounts) > 0
+	handshake := s.performHandshake(conn, reader, requireAuthInfo, policy.IPv6Accounts)
 	if !handshake.ok {
 		return
 	}
@@ -120,11 +120,10 @@ func (s *Socks5Inbound) ServeConnContext(baseCtx context.Context, conn net.Conn)
 	defer lifecycle.finish()
 
 	var prepare tunnelPrepareResult
-	if len(policy.SOCKS5Accounts) > 0 {
-		source := policy.SOCKS5Accounts[handshake.account].Address.Addr()
+	if len(policy.IPv6Accounts) > 0 {
+		source := policy.IPv6Accounts[handshake.account].Address.Addr()
 		lifecycle.log.EgressIP = source.String()
-		dialer := net.Dialer{LocalAddr: &net.TCPAddr{IP: net.IP(source.AsSlice())}}
-		prepare = dialDirectTunnel(baseCtx, s.tunnel, handshake.target, &dialer, "tcp6")
+		prepare = dialDirectTunnel(baseCtx, s.tunnel, handshake.target, ipv6SourceDialer(source), "tcp6")
 	} else {
 		prepare = prepareConnectTunnel(
 			baseCtx,

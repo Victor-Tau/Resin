@@ -9,7 +9,7 @@ import (
 // InboundPolicy carries endpoint-specific behavior into shared proxy handlers.
 type InboundPolicy struct {
 	RequireProxyAuthInfo bool
-	SOCKS5Accounts       map[string]model.IPv6Account
+	IPv6Accounts         map[string]model.IPv6Account
 }
 
 type inboundPolicyContextKey struct{}

@@ -5,8 +5,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/netip"
 	"strings"
 	"sync"
 
@@ -43,6 +45,12 @@ type ForwardProxy struct {
 	directTransport   *http.Transport
 	directOnce        sync.Once
 	bypass            *TargetBypassMatcher
+}
+
+type forwardIdentity struct {
+	platformName string
+	account      string
+	ipv6Source   netip.Addr
 }
 
 // NewForwardProxy creates a new forward proxy handler.
@@ -86,11 +94,36 @@ func (p *ForwardProxy) directHTTPTransport() *http.Transport {
 }
 
 func (p *ForwardProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodConnect {
-		p.handleCONNECT(w, r)
-	} else {
-		p.handleHTTP(w, r)
+	identity, authErr := p.authenticateForward(r)
+	if authErr != nil {
+		writeProxyError(w, authErr)
+		return
 	}
+	if r.Method == http.MethodConnect {
+		p.handleCONNECT(w, r, identity)
+	} else {
+		p.handleHTTP(w, r, identity)
+	}
+}
+
+func (p *ForwardProxy) authenticateForward(r *http.Request) (forwardIdentity, *ProxyError) {
+	accounts := InboundPolicyFromContext(r.Context()).IPv6Accounts
+	if len(accounts) > 0 {
+		credential, _ := parseProxyAuthorizationCredentialV1(r.Header.Get("Proxy-Authorization"))
+		// Basic auth separates the username and password at the first colon.
+		username, password, _ := strings.Cut(credential, ":")
+		if account, exists := accounts[username]; exists {
+			if account.Authenticate([]byte(password)) {
+				return forwardIdentity{account: username, ipv6Source: account.Address.Addr()}, nil
+			}
+			// Without a global token, optional HTTP auth cannot authorize this username.
+			if p.token == "" {
+				return forwardIdentity{}, ErrAuthFailed
+			}
+		}
+	}
+	platformName, account, err := p.authenticate(r)
+	return forwardIdentity{platformName: platformName, account: account}, err
 }
 
 // authenticate parses Proxy-Authorization and returns (platformName, account, error).
@@ -214,25 +247,27 @@ func prepareForwardOutboundRequest(in *http.Request) *http.Request {
 	return req
 }
 
-func (p *ForwardProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	platName, account, authErr := p.authenticate(r)
-	if authErr != nil {
-		writeProxyError(w, authErr)
-		return
-	}
-
+func (p *ForwardProxy) handleHTTP(w http.ResponseWriter, r *http.Request, identity forwardIdentity) {
 	lifecycle := newRequestLifecycle(p.events, r, ProxyTypeForward, false)
 	lifecycle.setTarget(r.Host, r.URL.String())
 	defer lifecycle.finish()
-	lifecycle.setAccount(account)
+	lifecycle.setAccount(identity.account)
 
 	var route routing.RouteResult
 	var hasRoute bool
 	var transport *http.Transport
-	if p.bypass != nil && p.bypass.ShouldBypass(r.Host) {
+	if identity.ipv6Source.IsValid() {
+		lifecycle.log.EgressIP = identity.ipv6Source.String()
+		dialer := ipv6SourceDialer(identity.ipv6Source)
+		transport = newDirectHTTPTransportWithDialer(p.transportConfig, p.metricsSink, func(ctx context.Context, _, target string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "tcp6", target)
+		})
+		// A transport with source-bound connections is only used for this request.
+		defer transport.CloseIdleConnections()
+	} else if p.bypass != nil && p.bypass.ShouldBypass(r.Host) {
 		transport = p.directHTTPTransport()
 	} else {
-		routed, routeErr := resolveRoutedOutbound(p.router, p.pool, platName, account, r.Host)
+		routed, routeErr := resolveRoutedOutbound(p.router, p.pool, identity.platformName, identity.account, r.Host)
 		if routeErr != nil {
 			lifecycle.setProxyError(routeErr)
 			lifecycle.setHTTPStatus(routeErr.HTTPCode)
@@ -321,32 +356,27 @@ func (p *ForwardProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *ForwardProxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
+func (p *ForwardProxy) handleCONNECT(w http.ResponseWriter, r *http.Request, identity forwardIdentity) {
 	target := r.Host
-	platName, account, authErr := p.authenticate(r)
-	if authErr != nil {
-		writeProxyError(w, authErr)
-		return
-	}
-
 	lifecycle := newRequestLifecycle(p.events, r, ProxyTypeForward, true)
 	lifecycle.setTarget(target, "")
 	defer lifecycle.finish()
-	lifecycle.setAccount(account)
+	lifecycle.setAccount(identity.account)
 
-	prepare := prepareConnectTunnel(
-		r.Context(),
-		tunnelDeps{
-			router:      p.router,
-			pool:        p.pool,
-			health:      p.health,
-			metricsSink: p.metricsSink,
-			bypass:      p.bypass,
-		},
-		platName,
-		account,
-		target,
-	)
+	deps := tunnelDeps{
+		router:      p.router,
+		pool:        p.pool,
+		health:      p.health,
+		metricsSink: p.metricsSink,
+		bypass:      p.bypass,
+	}
+	var prepare tunnelPrepareResult
+	if identity.ipv6Source.IsValid() {
+		lifecycle.log.EgressIP = identity.ipv6Source.String()
+		prepare = dialDirectTunnel(r.Context(), deps, target, ipv6SourceDialer(identity.ipv6Source), "tcp6")
+	} else {
+		prepare = prepareConnectTunnel(r.Context(), deps, identity.platformName, identity.account, target)
+	}
 	if prepare.route.PlatformID != "" {
 		lifecycle.setRouteResult(prepare.route)
 		lifecycle.setRelayInfo(prepare.relay)

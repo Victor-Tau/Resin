@@ -334,7 +334,7 @@ func (g *endpointSocksGate) ServeConnContext(ctx context.Context, conn net.Conn)
 		return
 	}
 	ctx = proxy.ContextWithInboundPolicy(ctx, proxy.InboundPolicy{
-		SOCKS5Accounts:       endpoint.SOCKS5Accounts,
+		IPv6Accounts:         endpoint.SOCKS5Accounts,
 		RequireProxyAuthInfo: endpoint.RequireProxyAuthInfo,
 	})
 	g.next.ServeConnContext(ctx, conn)

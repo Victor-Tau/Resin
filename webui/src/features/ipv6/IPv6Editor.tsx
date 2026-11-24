@@ -273,7 +273,7 @@ export function IPv6Editor({ initial, legacy, prefixes, defaultPrefix, endpoints
                   </label>
                 ))}
               </div>
-              {bindings.length > 0 && <p className="muted">{t("绑定后，这些端口的 SOCKS5 客户端需要使用 IPv6 代理的账号和密码。")}</p>}
+              {bindings.length > 0 && <p className="muted">{t("SOCKS5 使用绑定账号和密码。接入点开启 HTTP 正向代理时，也可以用同一账号通过 HTTP 连接。")}</p>}
             </fieldset>
           )}
           <div className="detail-actions field-span-2">

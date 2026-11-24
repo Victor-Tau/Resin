@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/Resinat/Resin/internal/netutil"
@@ -150,11 +151,18 @@ func (p *OutboundTransportPool) newReusableOutboundTransport(ob adapter.Outbound
 }
 
 func newDirectHTTPTransport(cfg OutboundTransportConfig, sink MetricsEventSink) *http.Transport {
+	return newDirectHTTPTransportWithDialer(cfg, sink, (&net.Dialer{}).DialContext)
+}
+
+func ipv6SourceDialer(source netip.Addr) *net.Dialer {
+	return &net.Dialer{LocalAddr: &net.TCPAddr{IP: source.AsSlice()}}
+}
+
+func newDirectHTTPTransportWithDialer(cfg OutboundTransportConfig, sink MetricsEventSink, dial func(context.Context, string, string) (net.Conn, error)) *http.Transport {
 	cfg = normalizeOutboundTransportConfig(cfg)
-	dialer := &net.Dialer{}
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := dialer.DialContext(ctx, network, addr)
+			conn, err := dial(ctx, network, addr)
 			if err != nil {
 				return nil, err
 			}
