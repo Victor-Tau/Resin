@@ -5,12 +5,12 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/Resinat/Resin/releases"><img src="https://img.shields.io/github/v/release/Resinat/Resin?style=flat-square&label=release&sort=semver" alt="Release" /></a>
-  <a href="https://github.com/Resinat/Resin/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/Resinat/Resin/release.yml?style=flat-square&label=release%20pipeline" alt="Release Pipeline" /></a>
-  <a href="https://github.com/Resinat/Resin/pkgs/container/resin"><img src="https://img.shields.io/badge/ghcr-ghcr.io%2Fresinat%2Fresin-2496ED?style=flat-square&logo=docker&logoColor=white" alt="GHCR Image" /></a>
-  <a href="https://github.com/Resinat/Resin/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Resinat/Resin?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/Resinat/Resin/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Resinat/Resin?style=flat-square" alt="Go Version" /></a>
-  <a href="https://github.com/Resinat/Resin/releases"><img src="https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20windows%20%C2%B7%20amd64%20%7C%20arm64-0A7EA4?style=flat-square" alt="Support Matrix" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/releases"><img src="https://img.shields.io/github/v/release/Victor-Tau/Resin?style=flat-square&label=release&sort=semver" alt="Release" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/Victor-Tau/Resin/release.yml?style=flat-square&label=release%20pipeline" alt="Release Pipeline" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/pkgs/container/resin"><img src="https://img.shields.io/badge/ghcr-ghcr.io%2Fvictor-tau%2Fresin-2496ED?style=flat-square&logo=docker&logoColor=white" alt="GHCR Image" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Victor-Tau/Resin?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Victor-Tau/Resin?style=flat-square" alt="Go Version" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/releases"><img src="https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20windows%20%C2%B7%20amd64%20%7C%20arm64-0A7EA4?style=flat-square" alt="Support Matrix" /></a>
   <a href="DESIGN.md"><img src="https://img.shields.io/badge/docs-DESIGN.md-1F6FEB?style=flat-square" alt="Design Docs" /></a>
 </p>
 
@@ -79,7 +79,7 @@
 # docker-compose.yml
 services:
   resin:
-    image: ghcr.io/resinat/resin:latest
+    image: ghcr.io/victor-tau/resin:latest
     container_name: resin
     restart: unless-stopped
     environment:
@@ -145,7 +145,16 @@ curl --proxy socks5h://192.0.2.10:2234 --proxy-user 'claude002:passwd2' https://
 
 `PATCH /api/v1/endpoints/{id}` 支持替换整个 `socks5_accounts` 列表。批量编辑时应保留仍要使用的用户名，对已有用户名省略 `password` 即可沿用原密码。管理 API 响应只返回用户名和地址。
 
-**Docker 部署**。从本 fork 构建镜像时使用 `docker build --build-arg ENABLE_IPV6_ASSIGNMENT=true -t resin:ipv6 .`。在 Compose 的 Resin 服务下指定 `image: resin:ipv6`、`network_mode: host`、`cap_add: [NET_ADMIN]`，并移除该服务的 `ports` 映射。保留原有令牌环境变量和数据卷。Linux 二进制部署可向 Resin 的 systemd 服务授予 `AmbientCapabilities=CAP_NET_ADMIN`。自动添加地址需要 Resin 进程能管理所选网卡。
+**Docker 部署**。在单核服务器上，可以复用 GitHub Actions 发布的镜像。要让容器内的 Resin 用户自动添加 IPv6，用下面的 `Dockerfile.ipv6` 为已编译好的程序设置文件能力。
+
+```dockerfile
+FROM ghcr.io/victor-tau/resin:1.5.0
+RUN apk add --no-cache libcap-setcap \
+    && setcap cap_net_admin=ep /usr/local/bin/resin \
+    && apk del libcap-setcap
+```
+
+执行 `docker build -t resin:ipv6 - < Dockerfile.ipv6`。在 Compose 的 Resin 服务下指定 `image: resin:ipv6`、`network_mode: host`、`cap_add: [NET_ADMIN]`，并移除该服务的 `ports` 映射。保留原有令牌环境变量和数据卷。直接部署 Linux 二进制时，可向 Resin 的 systemd 服务授予 `AmbientCapabilities=CAP_NET_ADMIN`。
 
 ### 节点池的定时出口检测和熔断
 
@@ -332,12 +341,21 @@ curl "http://127.0.0.1:2260/my-token/MyPlatform/https/api.example.com/v1/orders"
 
 ---
 
+## 通过 GitHub Actions 编译和发布
+
+本 fork 的正式版本由 GitHub 托管的 Ubuntu runner 编译。部署服务器只需下载对应架构的 Release 附件或拉取 GHCR 镜像。当前版本为 [v1.5.0](doc/release-notes/v1.5.0.md)。
+
+1. 在 `webui/` 下运行 `npm version 1.5.0 --no-git-tag-version --ignore-scripts`，同步 `package.json` 和锁文件。下次发布时，请把命令中的版本号换成新版本。
+2. 在 `doc/release-notes/v1.5.0.md` 写入同版本的发布说明，更新 README 的版本链接，将改动提交到 `master`。
+3. 在该提交上执行 `git tag v1.5.0` 和 `git push --atomic origin master v1.5.0`。标签会触发 [Release 工作流](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml)。
+4. 在 Actions 页面确认五个二进制构建、Release 附件发布和 Docker 镜像发布均成功。工作流把 Git 标签和提交号写入二进制，部署后可通过已认证的 `GET /api/v1/system/info` 核对。Linux 和 macOS 提供 amd64、arm64，Windows 提供 amd64。
+
 ## 其他部署方式
 
 <details>
 <summary><b>方式一：运行预编译二进制文件</b></summary>
 <br>
-前往项目的 <a href="https://github.com/Resinat/Resin/releases">Release</a> 页面，下载适合你操作系统架构的程序包。解压得到单个二进制文件 <code>resin</code>。
+前往项目的 <a href="https://github.com/Victor-Tau/Resin/releases">Release</a> 页面，下载适合你操作系统架构的程序包。解压得到单个二进制文件 <code>resin</code>。
 
 ```bash
 RESIN_ADMIN_TOKEN=【管理面板密码】 \
@@ -370,7 +388,7 @@ RESIN_PORT=2260
 
 ```bash
 # 1. 下载 Resin 源码
-git clone https://github.com/Resinat/Resin.git
+git clone https://github.com/Victor-Tau/Resin.git
 
 # 2. 编译 WebUI
 cd Resin/webui

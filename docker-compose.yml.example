@@ -1,9 +1,6 @@
 services:
   resin:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ghcr.io/resinat/resin:latest
+    image: ghcr.io/victor-tau/resin:latest
     container_name: resin
     restart: unless-stopped
     environment:

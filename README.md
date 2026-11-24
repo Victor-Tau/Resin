@@ -7,12 +7,12 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/Resinat/Resin/releases"><img src="https://img.shields.io/github/v/release/Resinat/Resin?style=flat-square&label=release&sort=semver" alt="Release" /></a>
-  <a href="https://github.com/Resinat/Resin/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/Resinat/Resin/release.yml?style=flat-square&label=release%20pipeline" alt="Release Pipeline" /></a>
-  <a href="https://github.com/Resinat/Resin/pkgs/container/resin"><img src="https://img.shields.io/badge/ghcr-ghcr.io%2Fresinat%2Fresin-2496ED?style=flat-square&logo=docker&logoColor=white" alt="GHCR Image" /></a>
-  <a href="https://github.com/Resinat/Resin/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Resinat/Resin?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/Resinat/Resin/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Resinat/Resin?style=flat-square" alt="Go Version" /></a>
-  <a href="https://github.com/Resinat/Resin/releases"><img src="https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20windows%20%C2%B7%20amd64%20%7C%20arm64-0A7EA4?style=flat-square" alt="Support Matrix" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/releases"><img src="https://img.shields.io/github/v/release/Victor-Tau/Resin?style=flat-square&label=release&sort=semver" alt="Release" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/Victor-Tau/Resin/release.yml?style=flat-square&label=release%20pipeline" alt="Release Pipeline" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/pkgs/container/resin"><img src="https://img.shields.io/badge/ghcr-ghcr.io%2Fvictor-tau%2Fresin-2496ED?style=flat-square&logo=docker&logoColor=white" alt="GHCR Image" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/blob/master/LICENSE"><img src="https://img.shields.io/github/license/Victor-Tau/Resin?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Victor-Tau/Resin?style=flat-square" alt="Go Version" /></a>
+  <a href="https://github.com/Victor-Tau/Resin/releases"><img src="https://img.shields.io/badge/support-linux%20%7C%20macOS%20%7C%20windows%20%C2%B7%20amd64%20%7C%20arm64-0A7EA4?style=flat-square" alt="Support Matrix" /></a>
   <a href="DESIGN.md"><img src="https://img.shields.io/badge/docs-DESIGN.md-1F6FEB?style=flat-square" alt="Design Docs" /></a>
 </p>
 
@@ -79,7 +79,7 @@ Docker Compose is the recommended quick-start path:
 # docker-compose.yml
 services:
   resin:
-    image: ghcr.io/resinat/resin:latest
+    image: ghcr.io/victor-tau/resin:latest
     container_name: resin
     restart: unless-stopped
     environment:
@@ -304,12 +304,21 @@ If you are a developer and want AI to help modify an existing project for native
 
 ---
 
+## Build and publish with GitHub Actions
+
+GitHub-hosted Ubuntu runners build releases for this fork. Deployment hosts download a release archive or pull the GHCR image. The current release is [v1.5.0](doc/release-notes/v1.5.0.md).
+
+1. Run `npm version 1.5.0 --no-git-tag-version --ignore-scripts` in `webui/` to update the package and lockfile versions. Substitute the new version on subsequent releases.
+2. Write the matching notes in `doc/release-notes/v1.5.0.md`, update the README version links, and commit the changes to `master`.
+3. Run `git tag v1.5.0`, then `git push --atomic origin master v1.5.0`. The tag starts the [Release workflow](https://github.com/Victor-Tau/Resin/actions/workflows/release.yml).
+4. Check the five binary builds, release upload, and Docker image jobs. The workflow embeds the tag and commit in each binary. After deployment, the authenticated `GET /api/v1/system/info` endpoint reports both values. Archives cover Linux and macOS on amd64 and arm64, and Windows on amd64.
+
 ## Other Deployment Options
 
 <details>
 <summary><b>Option 1: Run prebuilt binary</b></summary>
 <br>
-Go to the project's <a href="https://github.com/Resinat/Resin/releases">Release</a> page and download the package for your OS/architecture. After extraction, run the single binary <code>resin</code>.
+Go to the project's <a href="https://github.com/Victor-Tau/Resin/releases">Release</a> page and download the package for your OS/architecture. After extraction, run the single binary <code>resin</code>.
 
 ```bash
 RESIN_ADMIN_TOKEN=<admin-dashboard-password> \
@@ -342,7 +351,7 @@ Prerequisites: Go 1.26.10 and Node.js installed.
 
 ```bash
 # 1. Clone Resin source
-git clone https://github.com/Resinat/Resin.git
+git clone https://github.com/Victor-Tau/Resin.git
 
 # 2. Build WebUI
 cd Resin/webui
