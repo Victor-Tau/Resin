@@ -3365,6 +3365,26 @@ a {
   min-width: 790px;
 }
 
+.ipv6-group-select {
+  width: auto;
+  max-width: 100%;
+  padding: 6px 8px;
+}
+
+.ipv6-table .ipv6-group-heading {
+  cursor: default;
+}
+
+.ipv6-table .ipv6-group-heading th {
+  position: static;
+  background: #edf3fb;
+}
+
+.ipv6-group-heading .muted {
+  margin-inline-start: 12px;
+  font-weight: 400;
+}
+
 .ipv6-select-cell {
   width: 1%;
 }

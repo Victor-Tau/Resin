@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Select } from "../../components/ui/Select";
 import { Textarea } from "../../components/ui/Textarea";
 import { ToastContainer } from "../../components/ui/Toast";
 import { useToast } from "../../hooks/useToast";
@@ -36,6 +37,32 @@ type Entry = {
   legacyEndpointID?: string;
 };
 
+type GroupBy = "none" | "port" | "label";
+type ProxyRow = Entry & { ports: number[]; prefixLabel?: string };
+
+function groupProxyRows(rows: ProxyRow[], groupBy: GroupBy, locale: string) {
+  if (groupBy === "none") {
+    return [{ key: undefined, rows }];
+  }
+
+  const groups = new Map<number | string | undefined, ProxyRow[]>();
+  for (const row of rows) {
+    const keys = groupBy === "port" ? row.ports : [row.prefixLabel];
+    for (const key of keys.length ? keys : [undefined]) {
+      const group = groups.get(key) ?? [];
+      group.push(row);
+      groups.set(key, group);
+    }
+  }
+
+  const compare = new Intl.Collator(locale, { numeric: true }).compare;
+  return Array.from(groups, ([key, rows]) => ({ key, rows })).sort((a, b) => {
+    if (a.key === undefined) return 1;
+    if (b.key === undefined) return -1;
+    return compare(String(a.key), String(b.key));
+  });
+}
+
 async function changeLegacyAccounts(endpointID: string, usernames: string[], replacement?: SOCKS5Account) {
   const endpoint = await getEndpoint(endpointID);
   const names = new Set(usernames);
@@ -52,12 +79,13 @@ async function changeLegacyAccounts(endpointID: string, usernames: string[], rep
 }
 
 export function IPv6Page() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const client = useQueryClient();
   const { toasts, showToast, dismissToast } = useToast();
   const [editor, setEditor] = useState<Entry | null>();
   const [defaultPrefix, setDefaultPrefix] = useState<IPv6Prefix>();
   const [prefixManagerOpen, setPrefixManagerOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [selectedIDs, setSelectedIDs] = useState(() => new Set<string>());
   const [passwords, setPasswords] = useState(loadIPv6Passwords);
   const [credentials, setCredentials] = useState<IPv6Config[]>([]);
@@ -196,7 +224,20 @@ export function IPv6Page() {
   const pending = save.isPending || remove.isPending;
   const error = configsQuery.error ?? endpointsQuery.error ?? prefixesQuery.error ?? interfacesQuery.error;
   const portByID = new Map(endpoints.map((endpoint) => [endpoint.id, endpoint.port]));
-  const prefixByID = new Map(prefixes.map((prefix) => [prefix.id, prefix]));
+  const prefixLabelByID = new Map(prefixes.map((prefix) => [prefix.id, prefix.label]));
+  const rows = entries.map((entry) => {
+    const ports = new Set<number>();
+    for (const id of entry.config.endpoint_ids) {
+      const port = portByID.get(id);
+      if (port !== undefined) ports.add(port);
+    }
+    return {
+      ...entry,
+      ports: Array.from(ports).sort((a, b) => a - b),
+      prefixLabel: entry.config.prefix_id ? prefixLabelByID.get(entry.config.prefix_id) : undefined,
+    };
+  });
+  const proxyGroups = groupProxyRows(rows, groupBy, locale);
   const proxyFormUnavailable = pending || endpointsQuery.isPending || prefixesQuery.isPending;
   const selectedEntries = entries.filter(({ config }) => selectedIDs.has(config.id));
   const allSelected = entries.length > 0 && selectedEntries.length === entries.length;
@@ -385,6 +426,12 @@ export function IPv6Page() {
           </div>
           {entries.length > 0 && (
             <div className="detail-actions">
+              <Select className="ipv6-group-select" aria-label={t("代理分组方式")} value={groupBy}
+                onChange={(event) => setGroupBy(event.target.value as GroupBy)}>
+                <option value="none">{t("不分组")}</option>
+                <option value="port">{t("按连接端口分组")}</option>
+                <option value="label">{t("按号段标签分组")}</option>
+              </Select>
               {selectedEntries.length > 0 && <span className="muted">{t("已选 {{count}} 个", { count: selectedEntries.length })}</span>}
               <Button size="sm" variant="secondary" disabled={pending || !selectedEntries.length}
                 onClick={() => void copyProxies(selectedEntries.map(({ config }) => config))}>
@@ -415,64 +462,71 @@ export function IPv6Page() {
                   <th>{t("操作")}</th>
                 </tr>
               </thead>
-              <tbody>
-                {entries.map((entry) => {
-                  const { config } = entry;
-                  const address = config.address.split("/", 1)[0];
-                  const ports = config.endpoint_ids.flatMap((id) => {
-                    const port = portByID.get(id);
-                    return port === undefined ? [] : [port];
-                  });
-                  const prefix = config.prefix_id ? prefixByID.get(config.prefix_id) : undefined;
-                  return (
-                    <tr key={config.id}>
-                      <td className="ipv6-select-cell">
-                        <input type="checkbox" aria-label={t("选择代理 {{username}}", { username: config.username })}
-                          checked={selectedIDs.has(config.id)} disabled={pending} onChange={(event) => toggleSelected(config.id, event.target.checked)} />
-                      </td>
-                      <td>
-                        {config.username}
-                        {entry.legacyEndpointID && <small className="muted ipv6-legacy">{t("旧版映射")}</small>}
-                      </td>
-                      <td>
-                        <div className="ipv6-address-cell">
-                          <code>{address}</code>
-                          <Button variant="ghost" size="sm" aria-label={t("复制 IPv6 地址")} title={t("复制 IPv6 地址")}
-                            onClick={() => void copy(address)}>
-                            <Copy size={14} aria-hidden="true" />
-                          </Button>
-                        </div>
-                      </td>
-                      <td>
-                        <Badge variant={prefix ? "accent" : "muted"}>{prefix?.label ?? t("独立地址")}</Badge>
-                        <small className="muted ipv6-legacy">{config.interface}</small>
-                      </td>
-                      <td>
-                        <div className="ipv6-port-badges">
-                          {ports.length ? ports.map((port) => <Badge key={port} variant="info">:{port}</Badge>) :
-                            <Badge variant="muted">{t("未绑定")}</Badge>}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="detail-actions">
-                          <Button variant="secondary" size="sm" disabled={pending} onClick={() => void copyProxies([config])}>
-                            <Copy size={14} aria-hidden="true" />
-                            {t("复制")}
-                          </Button>
-                          <Button variant="secondary" size="sm" disabled={proxyFormUnavailable} onClick={() => openEditor(entry)}>
-                            <Pencil size={14} />
-                            {t("编辑")}
-                          </Button>
-                          <Button variant="danger" size="sm" disabled={pending} onClick={() => confirmDelete([entry])}>
-                            <Trash2 size={14} />
-                            {t("删除")}
-                          </Button>
-                        </div>
-                      </td>
+              {proxyGroups.map((group) => (
+                <tbody key={group.key === undefined ? "unassigned" : `group-${group.key}`}>
+                  {groupBy !== "none" && (
+                    <tr className="ipv6-group-heading">
+                      <th scope="rowgroup" colSpan={6}>
+                        {group.key === undefined
+                          ? t(groupBy === "port" ? "未绑定" : "无号段标签")
+                          : groupBy === "port" ? `:${group.key}` : group.key}
+                        <span className="muted">{t("{{count}} 个代理", { count: group.rows.length })}</span>
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
+                  )}
+                  {group.rows.map((entry) => {
+                    const { config, ports, prefixLabel } = entry;
+                    const address = config.address.split("/", 1)[0];
+                    return (
+                      <tr key={config.id}>
+                        <td className="ipv6-select-cell">
+                          <input type="checkbox" aria-label={t("选择代理 {{username}}", { username: config.username })}
+                            checked={selectedIDs.has(config.id)} disabled={pending} onChange={(event) => toggleSelected(config.id, event.target.checked)} />
+                        </td>
+                        <td>
+                          {config.username}
+                          {entry.legacyEndpointID && <small className="muted ipv6-legacy">{t("旧版映射")}</small>}
+                        </td>
+                        <td>
+                          <div className="ipv6-address-cell">
+                            <code>{address}</code>
+                            <Button variant="ghost" size="sm" aria-label={t("复制 IPv6 地址")} title={t("复制 IPv6 地址")}
+                              onClick={() => void copy(address)}>
+                              <Copy size={14} aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </td>
+                        <td>
+                          <Badge variant={prefixLabel ? "accent" : "muted"}>{prefixLabel ?? t("独立地址")}</Badge>
+                          <small className="muted ipv6-legacy">{config.interface}</small>
+                        </td>
+                        <td>
+                          <div className="ipv6-port-badges">
+                            {ports.length ? ports.map((port) => <Badge key={port} variant="info">:{port}</Badge>) :
+                              <Badge variant="muted">{t("未绑定")}</Badge>}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="detail-actions">
+                            <Button variant="secondary" size="sm" disabled={pending} onClick={() => void copyProxies([config])}>
+                              <Copy size={14} aria-hidden="true" />
+                              {t("复制")}
+                            </Button>
+                            <Button variant="secondary" size="sm" disabled={proxyFormUnavailable} onClick={() => openEditor(entry)}>
+                              <Pencil size={14} />
+                              {t("编辑")}
+                            </Button>
+                            <Button variant="danger" size="sm" disabled={pending} onClick={() => confirmDelete([entry])}>
+                              <Trash2 size={14} />
+                              {t("删除")}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              ))}
             </table>
           </div>
         )}

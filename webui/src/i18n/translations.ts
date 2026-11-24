@@ -673,6 +673,11 @@ Note: Once enabled, requests without authentication information are rejected ins
     "Enter a label, an egress interface, and a valid public IPv6 /64 range.",
   "还没有保存的号段": "No saved address ranges",
   "连接端口": "Connection ports",
+  "代理分组方式": "Group proxies",
+  "不分组": "No grouping",
+  "按连接端口分组": "Group by connection port",
+  "按号段标签分组": "Group by prefix label",
+  "无号段标签": "No prefix label",
   "选定号段后，会为每个代理随机分配一个 IPv6 地址。":
     "Selecting a range assigns a random IPv6 address to each proxy.",
   "选择出口号段": "Choose an Egress Range",
